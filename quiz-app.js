@@ -69,17 +69,22 @@ class QuizApp {
         }
 
         this.currentUser.name = nameInput.value.trim();
-        this.currentUser.age = parseInt(ageSelect.value);
+        this.currentUser.age = ageSelect.value; // Keep as string to handle 'grade5'
         
-        // Get questions for the selected age
+        // Get questions for the selected age/grade
         const questionsData = getFlatQuestionArray(this.currentUser.age);
         if (questionsData.length === 0) {
-            this.showNotification('No questions available for this age group!', 'error');
+            this.showNotification('No questions available for this selection!', 'error');
             return;
         }
 
-        // Shuffle questions and take first 50 (or all if less than 50)
-        this.currentQuestions = shuffleArray(questionsData).slice(0, 50);
+        // For Grade 5, use all questions in order; for age groups, shuffle and take 50
+        if (this.currentUser.age === 'grade5') {
+            this.currentQuestions = questionsData; // Use all 100 questions in order
+        } else {
+            this.currentQuestions = shuffleArray(questionsData).slice(0, 50); // Shuffle and take 50
+        }
+        
         this.currentQuestionIndex = 0;
         this.score = { correct: 0, incorrect: 0 };
         this.categoryScores = {};
@@ -100,7 +105,13 @@ class QuizApp {
     setupQuizInterface() {
         // Display user info
         document.getElementById('displayName').textContent = `👋 ${this.currentUser.name}`;
-        document.getElementById('displayAge').textContent = `🎂 ${this.currentUser.age} years old`;
+        
+        // Display appropriate age/grade info
+        if (this.currentUser.age === 'grade5') {
+            document.getElementById('displayAge').textContent = `📚 Grade 5 ICT Quiz`;
+        } else {
+            document.getElementById('displayAge').textContent = `🎂 ${this.currentUser.age} years old`;
+        }
         
         // Reset scores
         document.getElementById('correctCount').textContent = '0';
@@ -143,19 +154,146 @@ class QuizApp {
         const container = document.getElementById('answersContainer');
         container.innerHTML = '';
         
-        question.options.forEach((option, index) => {
-            const answerDiv = document.createElement('div');
-            answerDiv.className = 'answer-option';
-            answerDiv.textContent = option;
-            answerDiv.dataset.index = index;
+        if (question.type === 'fill-in-gap') {
+            // Create text input for fill-in-the-gap questions
+            const inputDiv = document.createElement('div');
+            inputDiv.className = 'fill-gap-container';
             
-            answerDiv.addEventListener('click', () => this.selectAnswer(index, answerDiv));
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'fill-gap-input';
+            input.placeholder = 'Type your answer here...';
+            input.id = 'fillGapInput';
             
-            container.appendChild(answerDiv);
-        });
+            input.addEventListener('input', (e) => {
+                const nextBtn = document.getElementById('nextQuestion');
+                nextBtn.disabled = e.target.value.trim() === '';
+                
+                // Clear previous selection state
+                inputDiv.classList.remove('correct', 'incorrect');
+            });
+            
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                    this.checkFillInAnswer(e.target.value.trim(), question);
+                }
+            });
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.textContent = 'Submit Answer';
+            submitBtn.className = 'btn-secondary submit-answer-btn';
+            submitBtn.addEventListener('click', () => {
+                const answer = input.value.trim();
+                if (answer !== '') {
+                    this.checkFillInAnswer(answer, question);
+                }
+            });
+            
+            inputDiv.appendChild(input);
+            inputDiv.appendChild(submitBtn);
+            container.appendChild(inputDiv);
+            
+            // Focus on input
+            setTimeout(() => input.focus(), 100);
+            
+        } else {
+            // Create multiple choice options
+            question.options.forEach((option, index) => {
+                const answerDiv = document.createElement('div');
+                answerDiv.className = 'answer-option';
+                answerDiv.textContent = option;
+                answerDiv.dataset.index = index;
+                
+                answerDiv.addEventListener('click', () => this.selectAnswer(index, answerDiv, question));
+                
+                container.appendChild(answerDiv);
+            });
+        }
     }
 
-    selectAnswer(selectedIndex, selectedElement) {
+    checkFillInAnswer(userAnswer, question) {
+        const correctAnswer = question.correct.toLowerCase();
+        const userAnswerLower = userAnswer.toLowerCase();
+        
+        // Check for exact match or partial matches for flexibility
+        const isCorrect = this.isAnswerCorrect(userAnswerLower, correctAnswer);
+        
+        // Store the answer
+        this.userAnswers.push({
+            questionIndex: this.currentQuestionIndex,
+            selectedAnswer: userAnswer,
+            correctAnswer: question.correct,
+            isCorrect: isCorrect,
+            category: question.category,
+            question: question.question,
+            explanation: question.explanation,
+            type: 'fill-in-gap'
+        });
+        
+        // Update scores
+        if (isCorrect) {
+            this.score.correct++;
+            this.categoryScores[question.category].correct++;
+        } else {
+            this.score.incorrect++;
+        }
+        this.categoryScores[question.category].total++;
+        
+        // Update score display
+        this.updateScoreDisplay();
+        
+        // Show feedback
+        this.showAnswerFeedback(isCorrect, question.explanation);
+        
+        // Highlight the input and disable it
+        const input = document.getElementById('fillGapInput');
+        const container = input.parentElement;
+        const submitBtn = container.querySelector('.submit-answer-btn');
+        
+        input.disabled = true;
+        submitBtn.disabled = true;
+        
+        if (isCorrect) {
+            container.classList.add('correct');
+        } else {
+            container.classList.add('incorrect');
+            // Show correct answer
+            const correctDiv = document.createElement('div');
+            correctDiv.className = 'correct-answer-display';
+            correctDiv.innerHTML = `<strong>Correct answer:</strong> ${question.correct}`;
+            container.appendChild(correctDiv);
+        }
+        
+        // Enable next button
+        document.getElementById('nextQuestion').disabled = false;
+    }
+    
+    isAnswerCorrect(userAnswer, correctAnswer) {
+        // Exact match
+        if (userAnswer === correctAnswer) return true;
+        
+        // Remove common articles and prepositions for more flexible matching
+        const cleanUser = userAnswer.replace(/\b(the|a|an|and|or|of|in|on|at|to|for|with)\b/g, '').trim();
+        const cleanCorrect = correctAnswer.replace(/\b(the|a|an|and|or|of|in|on|at|to|for|with)\b/g, '').trim();
+        
+        if (cleanUser === cleanCorrect) return true;
+        
+        // Check if user answer contains the main keywords
+        const correctWords = correctAnswer.split(' ').filter(word => word.length > 2);
+        const userWords = userAnswer.split(' ');
+        
+        // At least 70% of important words should match
+        let matchCount = 0;
+        correctWords.forEach(word => {
+            if (userWords.some(userWord => userWord.includes(word) || word.includes(userWord))) {
+                matchCount++;
+            }
+        });
+        
+        return matchCount / correctWords.length >= 0.7;
+    }
+
+    selectAnswer(selectedIndex, selectedElement, question) {
         // Remove previous selections
         document.querySelectorAll('.answer-option').forEach(option => {
             option.classList.remove('selected');
@@ -165,7 +303,6 @@ class QuizApp {
         selectedElement.classList.add('selected');
         
         // Store the answer
-        const question = this.currentQuestions[this.currentQuestionIndex];
         const isCorrect = selectedIndex === question.correct;
         
         this.userAnswers.push({
@@ -175,7 +312,8 @@ class QuizApp {
             isCorrect: isCorrect,
             category: question.category,
             question: question.question,
-            explanation: question.explanation
+            explanation: question.explanation,
+            type: 'multiple-choice'
         });
         
         // Update scores
@@ -291,6 +429,14 @@ class QuizApp {
         const chartsContainer = document.getElementById('categoryCharts');
         chartsContainer.innerHTML = '';
         
+        // Add user name header for Grade 5
+        if (this.currentUser.age === 'grade5') {
+            const nameHeader = document.createElement('div');
+            nameHeader.className = 'result-name-header';
+            nameHeader.innerHTML = `<h2>📊 Performance Summary for ${this.currentUser.name}</h2>`;
+            chartsContainer.appendChild(nameHeader);
+        }
+        
         for (const category in this.categoryScores) {
             const data = this.categoryScores[category];
             if (data.total === 0) continue;
@@ -300,8 +446,20 @@ class QuizApp {
             const chartDiv = document.createElement('div');
             chartDiv.className = 'category-chart';
             
+            // Special styling for Grade 5 weekly modules
+            if (this.currentUser.age === 'grade5') {
+                chartDiv.classList.add('weekly-module');
+            }
+            
             chartDiv.innerHTML = `
                 <h4>${category}</h4>
+                <div class="week-summary">
+                    <div class="score-summary-line">
+                        <span class="correct-count">${data.correct} correct</span>
+                        <span class="total-count">out of ${data.total}</span>
+                        <span class="percentage">${percentage}%</span>
+                    </div>
+                </div>
                 <div class="chart-bar">
                     <div class="chart-fill" style="width: 0%"></div>
                 </div>
@@ -317,8 +475,119 @@ class QuizApp {
             setTimeout(() => {
                 const fill = chartDiv.querySelector('.chart-fill');
                 fill.style.width = percentage + '%';
+                
+                // Add performance level indicator
+                let performanceLevel = '';
+                let performanceColor = '';
+                if (percentage >= 80) {
+                    performanceLevel = 'Excellent! 🌟';
+                    performanceColor = '#4caf50';
+                } else if (percentage >= 70) {
+                    performanceLevel = 'Good! 👍';
+                    performanceColor = '#8bc34a';
+                } else if (percentage >= 60) {
+                    performanceLevel = 'Fair 📚';
+                    performanceColor = '#ff9800';
+                } else {
+                    performanceLevel = 'Need more practice 💪';
+                    performanceColor = '#f44336';
+                }
+                
+                fill.style.background = `linear-gradient(90deg, ${performanceColor}, ${performanceColor}aa)`;
+                
+                const performanceDiv = document.createElement('div');
+                performanceDiv.className = 'performance-indicator';
+                performanceDiv.textContent = performanceLevel;
+                performanceDiv.style.color = performanceColor;
+                chartDiv.appendChild(performanceDiv);
             }, 500);
         }
+        
+        // Add overall summary for Grade 5
+        if (this.currentUser.age === 'grade5') {
+            this.addOverallSummary(chartsContainer);
+        }
+    }
+    
+    addOverallSummary(container) {
+        const overallDiv = document.createElement('div');
+        overallDiv.className = 'overall-summary';
+        
+        const totalQuestions = this.currentQuestions.length;
+        const overallPercentage = Math.round((this.score.correct / totalQuestions) * 100);
+        
+        let grade = '';
+        let gradeColor = '';
+        if (overallPercentage >= 90) {
+            grade = 'A+ Outstanding!';
+            gradeColor = '#4caf50';
+        } else if (overallPercentage >= 80) {
+            grade = 'A Good!';
+            gradeColor = '#8bc34a';
+        } else if (overallPercentage >= 70) {
+            grade = 'B Fair';
+            gradeColor = '#ff9800';
+        } else if (overallPercentage >= 60) {
+            grade = 'C Pass';
+            gradeColor = '#ff7043';
+        } else {
+            grade = 'F Need Improvement';
+            gradeColor = '#f44336';
+        }
+        
+        overallDiv.innerHTML = `
+            <h3>📋 Overall Assessment</h3>
+            <div class="final-grade">
+                <span class="grade-label">Grade:</span>
+                <span class="grade-value" style="color: ${gradeColor}">${grade}</span>
+            </div>
+            <div class="recommendations">
+                <h4>📝 Recommendations:</h4>
+                <ul id="recommendationsList"></ul>
+            </div>
+        `;
+        
+        container.appendChild(overallDiv);
+        
+        // Add specific recommendations based on performance
+        this.addRecommendations();
+    }
+    
+    addRecommendations() {
+        const recList = document.getElementById('recommendationsList');
+        const recommendations = [];
+        
+        // Analyze performance by week and add recommendations
+        for (const category in this.categoryScores) {
+            const data = this.categoryScores[category];
+            const percentage = Math.round((data.correct / data.total) * 100);
+            
+            if (percentage < 70) {
+                if (category.includes('Week 1')) {
+                    recommendations.push('Review computer hardware and software basics');
+                } else if (category.includes('Week 2')) {
+                    recommendations.push('Practice file management and organization skills');
+                } else if (category.includes('Week 3')) {
+                    recommendations.push('Memorize and practice keyboard shortcuts');
+                } else if (category.includes('Week 4')) {
+                    recommendations.push('Learn more about Internet safety and usage');
+                }
+            }
+        }
+        
+        if (recommendations.length === 0) {
+            recommendations.push('Excellent work! Continue practicing to maintain your skills.');
+            recommendations.push('Try helping classmates who might need assistance.');
+        } else {
+            recommendations.push('Ask your teacher for extra practice materials.');
+            recommendations.push('Review your notes and textbook for these topics.');
+        }
+        
+        recommendations.forEach(rec => {
+            const li = document.createElement('li');
+            li.textContent = rec;
+            recList.appendChild(li);
+        });
     }
 
     saveResults() {
@@ -374,12 +643,15 @@ class QuizApp {
         const date = new Date(result.date).toLocaleDateString();
         const duration = this.formatDuration(result.duration);
         
+        // Display appropriate age/grade label
+        const ageLabel = result.age === 'grade5' ? 'Grade 5 ICT' : `Age ${result.age}`;
+        
         return `
             <div class="result-item">
                 <div class="result-info">
                     <div class="result-name">${result.name}</div>
                     <div class="result-details">
-                        Age: ${result.age} | Date: ${date} | Duration: ${duration}
+                        ${ageLabel} | Date: ${date} | Duration: ${duration}
                     </div>
                     <div class="result-details">
                         ${result.score.correct}/${result.totalQuestions} correct

@@ -944,6 +944,273 @@ const quizData = {
                 }
             ]
         }
+    },
+    grade5: {
+        name: "Grade 5 ICT Quiz (First Term)",
+        categories: {
+            "Week 1 - Revision of Previous Terms": [
+                {
+                    question: "ICT stands for __________.",
+                    type: "fill-in-gap",
+                    correct: "Information and Communication Technology",
+                    explanation: "ICT stands for Information and Communication Technology - the use of technology to communicate and handle information."
+                },
+                {
+                    question: "Which of these is a physical part of a computer?",
+                    type: "multiple-choice",
+                    options: ["Software", "CPU", "Hardware", "Paint"],
+                    correct: 2,
+                    explanation: "Hardware refers to the physical parts of a computer that you can see and touch."
+                },
+                {
+                    question: "The instructions that tell the hardware what to do are called __________.",
+                    type: "fill-in-gap",
+                    correct: "Software",
+                    explanation: "Software consists of programs and instructions that tell the computer hardware how to perform tasks."
+                },
+                {
+                    question: "Which of these is an input device?",
+                    type: "multiple-choice",
+                    options: ["Monitor", "Speaker", "Keyboard", "Printer"],
+                    correct: 2,
+                    explanation: "A keyboard is an input device because it allows you to input data into the computer."
+                },
+                {
+                    question: "Which device shows what we are doing on the computer screen?",
+                    type: "multiple-choice",
+                    options: ["Mouse", "Monitor", "Keyboard", "Scanner"],
+                    correct: 1,
+                    explanation: "The monitor displays everything we do on the computer visually."
+                },
+                {
+                    question: "The brain of the computer is called the __________.",
+                    type: "fill-in-gap",
+                    correct: "CPU",
+                    explanation: "The CPU (Central Processing Unit) is called the brain because it processes all information and controls the computer."
+                },
+                {
+                    question: "Hardware includes the following except:",
+                    type: "multiple-choice",
+                    options: ["Mouse", "Monitor", "Paint", "Printer"],
+                    correct: 2,
+                    explanation: "Paint is software (a program), while mouse, monitor, and printer are hardware (physical components)."
+                },
+                {
+                    question: "An example of software is __________.",
+                    type: "fill-in-gap",
+                    correct: "Microsoft Word",
+                    explanation: "Microsoft Word is a software application used for creating and editing documents."
+                },
+                {
+                    question: "Which of these is an output device?",
+                    type: "multiple-choice",
+                    options: ["Mouse", "Keyboard", "Printer", "Scanner"],
+                    correct: 2,
+                    explanation: "A printer is an output device because it produces results from the computer onto paper."
+                },
+                {
+                    question: "ICT means using technology to handle and share __________.",
+                    type: "fill-in-gap",
+                    correct: "Information",
+                    explanation: "ICT is about using technology to process, store, and communicate information effectively."
+                }
+            ],
+            "Week 2 - Exploration of Files": [
+                {
+                    question: "A file is a collection of __________.",
+                    type: "fill-in-gap",
+                    correct: "Data or information",
+                    explanation: "Files contain data or information that is stored digitally with a specific name."
+                },
+                {
+                    question: "A folder is also called a __________.",
+                    type: "fill-in-gap",
+                    correct: "Directory",
+                    explanation: "A folder is also called a directory - both terms refer to a container for organizing files."
+                },
+                {
+                    question: "Which of the following is a document file type?",
+                    type: "multiple-choice",
+                    options: [".jpg", ".docx", ".mp3", ".mp4"],
+                    correct: 1,
+                    explanation: ".docx is the file extension for Microsoft Word documents."
+                },
+                {
+                    question: "Which file type is used for pictures?",
+                    type: "multiple-choice",
+                    options: [".pdf", ".png", ".mp3", ".pptx"],
+                    correct: 1,
+                    explanation: ".png is a common image file format used for storing pictures."
+                },
+                {
+                    question: "What file extension is used for music?",
+                    type: "multiple-choice",
+                    options: [".jpg", ".mp3", ".docx", ".pdf"],
+                    correct: 1,
+                    explanation: ".mp3 is a common audio file format used for storing music files."
+                },
+                {
+                    question: "To create a new folder, you right-click, choose __________, then Folder.",
+                    type: "fill-in-gap",
+                    correct: "New",
+                    explanation: "Right-clicking and selecting 'New' then 'Folder' creates a new folder."
+                },
+                {
+                    question: "To rename a file, right-click and select __________.",
+                    type: "fill-in-gap",
+                    correct: "Rename",
+                    explanation: "Right-clicking on a file and selecting 'Rename' allows you to change its name."
+                },
+                {
+                    question: "When a file is deleted, it goes into the __________.",
+                    type: "fill-in-gap",
+                    correct: "Recycle Bin",
+                    explanation: "Deleted files go to the Recycle Bin where they can be restored if needed."
+                },
+                {
+                    question: "To move a file, click, hold, and __________ it to another folder.",
+                    type: "fill-in-gap",
+                    correct: "Drag",
+                    explanation: "Dragging a file means clicking and holding while moving it to a new location."
+                },
+                {
+                    question: "Which of these is a video file type?",
+                    type: "multiple-choice",
+                    options: [".mp4", ".docx", ".png", ".pdf"],
+                    correct: 0,
+                    explanation: ".mp4 is a video file format commonly used for storing movies and video clips."
+                }
+            ],
+            "Week 3 - Keyboard Shortcuts": [
+                {
+                    question: "A keyboard shortcut helps you perform a task more __________.",
+                    type: "fill-in-gap",
+                    correct: "Quickly",
+                    explanation: "Keyboard shortcuts make tasks faster and more efficient than using menus."
+                },
+                {
+                    question: "Ctrl + C is used to __________.",
+                    type: "multiple-choice",
+                    options: ["Cut", "Copy", "Paste", "Save"],
+                    correct: 1,
+                    explanation: "Ctrl + C copies selected text or files to the clipboard."
+                },
+                {
+                    question: "Ctrl + V is used to __________.",
+                    type: "multiple-choice",
+                    options: ["Paste", "Copy", "Undo", "Save"],
+                    correct: 0,
+                    explanation: "Ctrl + V pastes whatever is currently copied or cut from the clipboard."
+                },
+                {
+                    question: "Ctrl + X is used to __________.",
+                    type: "multiple-choice",
+                    options: ["Cut", "Copy", "Paste", "Select All"],
+                    correct: 0,
+                    explanation: "Ctrl + X cuts (removes) selected text or files and places them on the clipboard."
+                },
+                {
+                    question: "Ctrl + Z is used to __________ the last action.",
+                    type: "fill-in-gap",
+                    correct: "Undo",
+                    explanation: "Ctrl + Z undoes the last action, helping to reverse mistakes."
+                },
+                {
+                    question: "Ctrl + S helps you to __________ your work.",
+                    type: "fill-in-gap",
+                    correct: "Save",
+                    explanation: "Ctrl + S saves the current document or file you're working on."
+                },
+                {
+                    question: "Ctrl + A is used to __________ all text or items.",
+                    type: "fill-in-gap",
+                    correct: "Select",
+                    explanation: "Ctrl + A selects all content in the current document or folder."
+                },
+                {
+                    question: "Alt + Tab helps to switch between __________.",
+                    type: "fill-in-gap",
+                    correct: "Open applications",
+                    explanation: "Alt + Tab allows quick switching between different open programs or applications."
+                },
+                {
+                    question: "Windows Key + D shows or hides the __________.",
+                    type: "fill-in-gap",
+                    correct: "Desktop",
+                    explanation: "Windows Key + D instantly shows the desktop by minimizing all open windows."
+                },
+                {
+                    question: "Keyboard shortcuts make working on the computer more __________.",
+                    type: "fill-in-gap",
+                    correct: "Efficient",
+                    explanation: "Shortcuts increase efficiency by reducing the time needed to perform common tasks."
+                }
+            ],
+            "Week 4 - Introduction to the Internet": [
+                {
+                    question: "The Internet is a global network that connects __________.",
+                    type: "fill-in-gap",
+                    correct: "Millions of computers",
+                    explanation: "The Internet connects millions of computers and devices worldwide."
+                },
+                {
+                    question: "The Internet is also called the __________.",
+                    type: "fill-in-gap",
+                    correct: "Web",
+                    explanation: "The Internet is also commonly called the Web or World Wide Web."
+                },
+                {
+                    question: "A website is a collection of related __________.",
+                    type: "fill-in-gap",
+                    correct: "Web pages",
+                    explanation: "Websites consist of multiple related web pages that are linked together."
+                },
+                {
+                    question: "The unique address of a website is called a __________.",
+                    type: "fill-in-gap",
+                    correct: "URL",
+                    explanation: "URL (Uniform Resource Locator) is the specific address of a website."
+                },
+                {
+                    question: "Which of these is a search engine?",
+                    type: "multiple-choice",
+                    options: ["Facebook", "Google", "WhatsApp", "YouTube"],
+                    correct: 1,
+                    explanation: "Google is a search engine that helps find information on the Internet."
+                },
+                {
+                    question: "Which of the following is an example of a website?",
+                    type: "multiple-choice",
+                    options: ["www.wikipedia.org", ".mp3", "Desktop", "CPU"],
+                    correct: 0,
+                    explanation: "Wikipedia.org is a website - a collection of web pages accessible through the Internet."
+                },
+                {
+                    question: "You can send and receive __________ using the Internet.",
+                    type: "fill-in-gap",
+                    correct: "Emails",
+                    explanation: "Email is one of the main ways we communicate through the Internet."
+                },
+                {
+                    question: "Watching educational videos online is a benefit of using the __________.",
+                    type: "fill-in-gap",
+                    correct: "Internet",
+                    explanation: "The Internet provides access to educational content and learning resources."
+                },
+                {
+                    question: "It is important to use social media with __________.",
+                    type: "fill-in-gap",
+                    correct: "Adult supervision",
+                    explanation: "Children should always use social media safely with adult supervision."
+                },
+                {
+                    question: "Playing online games should be done with __________.",
+                    type: "fill-in-gap",
+                    correct: "Permission",
+                    explanation: "Children should always get permission before playing online games for safety."
+                }
+            ]
+        }
     }
 };
 
