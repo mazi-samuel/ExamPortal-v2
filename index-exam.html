@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICT Mid-Term Examination 📚</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="exam-styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="screen active">
+        <div class="welcome-container">
+            <h1 class="title">📚 ICT Mid-Term Examination 🎓</h1>
+            <div class="welcome-animation">
+                <div class="floating-icon">💻</div>
+                <div class="floating-icon">📖</div>
+                <div class="floating-icon">✏️</div>
+            </div>
+            <p class="subtitle">Welcome! Please login to start your exam</p>
+            
+            <div class="user-form">
+                <div class="input-group">
+                    <label for="userName">👋 Student Name:</label>
+                    <input type="text" id="userName" placeholder="Enter your full name" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="userGrade">📚 Select Your Grade:</label>
+                    <select id="userGrade" required>
+                        <option value="">Select your grade</option>
+                        <option value="grade1">Grade 1</option>
+                        <option value="grade2">Grade 2</option>
+                        <option value="grade3">Grade 3</option>
+                        <option value="grade4">Grade 4</option>
+                        <option value="grade5">Grade 5</option>
+                    </select>
+                </div>
+                
+                <button id="startExam" class="btn-primary">
+                    <i class="fas fa-check-circle"></i> Start Examination
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exam Screen -->
+    <div id="examScreen" class="screen">
+        <div class="exam-header">
+            <div class="exam-info">
+                <h2 id="examTitle">ICT Mid-Term Examination</h2>
+                <div class="student-info">
+                    <span id="displayName" class="student-name"></span>
+                    <span id="displayGrade" class="student-grade"></span>
+                </div>
+            </div>
+            
+            <div class="progress-info">
+                <div class="current-section" id="currentSection">Section A</div>
+                <div class="question-counter">
+                    <span id="questionNumber">1</span> / <span id="totalQuestions">15</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="exam-container">
+            <div class="section-header">
+                <h3 id="sectionTitle" class="section-title">SECTION A: OBJECTIVES</h3>
+                <p id="sectionMarks" class="section-marks">15 Marks</p>
+            </div>
+
+            <div class="question-section">
+                <div class="question-number-badge" id="questionBadge">Question 1</div>
+                <h2 id="questionText" class="question-text"></h2>
+            </div>
+
+            <div id="answersContainer" class="answers-container">
+                <!-- Answer options will be dynamically generated -->
+            </div>
+
+            <div class="exam-controls">
+                <button id="nextQuestion" class="btn-primary" disabled>
+                    Next Question <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Feedback Animation -->
+        <div id="feedbackAnimation" class="feedback-animation">
+            <div class="feedback-content">
+                <div class="feedback-emoji"></div>
+                <div class="feedback-text"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="resultsScreen" class="screen">
+        <div class="results-container">
+            <div class="exam-complete-badge">
+                <i class="fas fa-trophy"></i>
+            </div>
+            <h1 class="results-title">Examination Complete! 🎉</h1>
+            
+            <div class="student-result-header">
+                <h2 id="resultStudentName"></h2>
+                <p id="resultGrade"></p>
+                <p id="resultDate" class="result-date"></p>
+            </div>
+
+            <div class="final-score-card">
+                <div class="score-display-main">
+                    <div class="score-circle-large">
+                        <div class="score-percentage" id="scorePercentage">0%</div>
+                        <div class="score-details">
+                            <span id="finalScore">0</span> / <span id="totalMarks">25</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grade-display">
+                    <div class="grade-badge" id="gradeBadge">A</div>
+                    <p class="grade-label" id="gradeLabel">Excellent!</p>
+                </div>
+            </div>
+
+            <div class="section-breakdown" id="sectionBreakdown">
+                <h3>📊 Performance by Section</h3>
+                <div class="breakdown-container" id="breakdownContainer">
+                    <!-- Section performance will be shown here -->
+                </div>
+            </div>
+
+            <div class="remarks-section" id="remarksSection">
+                <h3>📝 Teacher's Remarks</h3>
+                <div class="remarks-box" id="remarksBox"></div>
+            </div>
+
+            <div class="results-actions">
+                <button id="printResults" class="btn-primary">
+                    <i class="fas fa-print"></i> Print Results
+                </button>
+                <button id="retakeExam" class="btn-secondary">
+                    <i class="fas fa-redo"></i> Take Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print View (Hidden, only shows when printing) -->
+    <div id="printView" class="print-view">
+        <div class="print-header">
+            <h1>ICT Mid-Term Examination Report</h1>
+            <div class="school-info">
+                <p class="school-name">Primary School ICT Department</p>
+                <p class="academic-session">Academic Session 2025/2026 - Mid-Term</p>
+            </div>
+        </div>
+
+        <div class="print-student-info">
+            <div class="info-row">
+                <span class="label">Student Name:</span>
+                <span id="printStudentName" class="value"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Grade:</span>
+                <span id="printGrade" class="value"></span>
+            </div>
+            <div class="info-row">
+                <span class="label">Date:</span>
+                <span id="printDate" class="value"></span>
+            </div>
+        </div>
+
+        <div class="print-scores">
+            <table class="scores-table">
+                <thead>
+                    <tr>
+                        <th>Section</th>
+                        <th>Questions</th>
+                        <th>Correct</th>
+                        <th>Marks Obtained</th>
+                        <th>Total Marks</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody id="printScoresBody">
+                    <!-- Scores will be inserted here -->
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="3"><strong>Total</strong></td>
+                        <td id="printTotalObtained"><strong>0</strong></td>
+                        <td id="printTotalMarks"><strong>25</strong></td>
+                        <td id="printOverallPercentage"><strong>0%</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="print-grade">
+            <div class="grade-box">
+                <span class="grade-title">Grade:</span>
+                <span id="printGradeLetter" class="grade-letter">A</span>
+            </div>
+            <p id="printGradeRemark" class="grade-remark"></p>
+        </div>
+
+        <div class="print-remarks">
+            <h3>Remarks:</h3>
+            <div id="printRemarks" class="remarks-content"></div>
+        </div>
+
+        <div class="print-footer">
+            <div class="signature-section">
+                <div class="signature">
+                    <p>_______________________</p>
+                    <p>Teacher's Signature</p>
+                </div>
+                <div class="signature">
+                    <p>_______________________</p>
+                    <p>Parent's Signature</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="exam-data.js"></script>
+    <script src="exam-app.js"></script>
+</body>
+</html>
