@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher's Score Sheet - ICT Mid-Term</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Comic Neue', cursive;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 25px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #e0e0e0;
+        }
+
+        .header h1 {
+            font-family: 'Fredoka One', cursive;
+            color: #4a47a3;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(145deg, #f0f4ff, #e8eeff);
+            border-radius: 15px;
+        }
+
+        .controls label {
+            font-weight: bold;
+            color: #4a47a3;
+            font-size: 1.1rem;
+        }
+
+        .controls select {
+            padding: 12px 20px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: 'Comic Neue', cursive;
+            background: white;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .controls select:focus {
+            outline: none;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            font-family: 'Comic Neue', cursive;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #4caf50, #8bc34a);
+        }
+
+        .btn-print {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #f44336, #ff7043);
+        }
+
+        .btn-home {
+            background: linear-gradient(135deg, #ff9800, #ffc107);
+            text-decoration: none;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: #667eea;
+            transform: translateY(-3px);
+        }
+
+        .stat-card .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+
+        .stat-card .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .score-table-container {
+            overflow-x: auto;
+            margin: 20px 0;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        thead th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 12px;
+            text-align: center;
+            font-size: 0.95rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        thead th:first-child,
+        thead th:nth-child(2) {
+            text-align: left;
+        }
+
+        tbody td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 0.95rem;
+        }
+
+        tbody td:first-child {
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        tbody td:nth-child(2) {
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tbody tr:hover {
+            background: rgba(102, 126, 234, 0.08);
+        }
+
+        tbody tr:nth-child(even) {
+            background: rgba(102, 126, 234, 0.03);
+        }
+
+        tbody tr:nth-child(even):hover {
+            background: rgba(102, 126, 234, 0.08);
+        }
+
+        .grade-cell {
+            font-weight: bold;
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            min-width: 35px;
+        }
+
+        .grade-a { background: #e8f5e9; color: #2e7d32; }
+        .grade-b { background: #fff8e1; color: #f57f17; }
+        .grade-c { background: #fff3e0; color: #ef6c00; }
+        .grade-d { background: #fbe9e7; color: #d84315; }
+        .grade-f { background: #ffebee; color: #c62828; }
+
+        tfoot td {
+            padding: 12px;
+            font-weight: bold;
+            background: #f5f5f5;
+            text-align: center;
+            border-top: 3px solid #667eea;
+        }
+
+        tfoot td:nth-child(2) {
+            text-align: left;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .no-data i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            display: block;
+            color: #ddd;
+        }
+
+        .no-data h3 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 20px;
+                border-radius: 0;
+            }
+
+            .controls, .footer, .btn {
+                display: none !important;
+            }
+
+            .header {
+                border-bottom: 2px solid #000;
+            }
+
+            .header h1 {
+                color: #000;
+                font-size: 1.8rem;
+            }
+
+            .stats {
+                display: none;
+            }
+
+            .score-table-container {
+                box-shadow: none;
+                overflow: visible;
+            }
+
+            table {
+                min-width: auto;
+            }
+
+            thead th {
+                background: #333 !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .grade-cell {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .print-header-info {
+                display: block !important;
+                text-align: center;
+                margin-bottom: 20px;
+            }
+
+            .print-footer-info {
+                display: block !important;
+                margin-top: 40px;
+            }
+        }
+
+        .print-header-info, .print-footer-info {
+            display: none;
+        }
+
+        .print-footer-info .signature-row {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 50px;
+        }
+
+        .print-footer-info .signature-line {
+            text-align: center;
+        }
+
+        .print-footer-info .signature-line p:first-child {
+            border-top: 1px solid #000;
+            padding-top: 5px;
+            width: 200px;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 20px; }
+            .header h1 { font-size: 1.6rem; }
+            .controls { flex-direction: column; }
+            .controls select { width: 100%; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Teacher's Score Sheet</h1>
+            <p>ICT Mid-Term Examination - Academic Session 2025/2026</p>
+            <p>Primary School ICT Department</p>
+        </div>
+
+        <div class="print-header-info">
+            <h2>ICT Mid-Term Examination Score Sheet</h2>
+            <p>Primary School ICT Department | Academic Session 2025/2026</p>
+        </div>
+
+        <div class="controls">
+            <label for="classSelect"><i class="fas fa-graduation-cap"></i> Select Class:</label>
+            <select id="classSelect">
+                <option value="">-- All Classes --</option>
+                <option value="grade1">Grade 1</option>
+                <option value="grade2">Grade 2</option>
+                <option value="grade3">Grade 3</option>
+                <option value="grade4">Grade 4</option>
+                <option value="grade5">Grade 5</option>
+            </select>
+
+            <label for="dateFilter"><i class="fas fa-calendar"></i> Date:</label>
+            <select id="dateFilter">
+                <option value="">-- All Dates --</option>
+                <option value="today">Today</option>
+            </select>
+
+            <button class="btn btn-download" onclick="downloadCSV()">
+                <i class="fas fa-download"></i> Download CSV
+            </button>
+            <button class="btn btn-print" onclick="window.print()">
+                <i class="fas fa-print"></i> Print
+            </button>
+        </div>
+
+        <div class="stats" id="statsContainer">
+            <div class="stat-card">
+                <span class="stat-number" id="totalStudents">0</span>
+                <span class="stat-label">Total Students</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="classAverage">0</span>
+                <span class="stat-label">Class Average (/60)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="highestScore">0</span>
+                <span class="stat-label">Highest Score (/60)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="lowestScore">0</span>
+                <span class="stat-label">Lowest Score (/60)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="passRate">0%</span>
+                <span class="stat-label">Pass Rate (≥50%)</span>
+            </div>
+        </div>
+
+        <div class="score-table-container">
+            <table id="scoreTable">
+                <thead>
+                    <tr>
+                        <th>S/N</th>
+                        <th>Student Name</th>
+                        <th>Class</th>
+                        <th>Sec A (/20)</th>
+                        <th>Sec B (/20)</th>
+                        <th>Sec C (/20)</th>
+                        <th>Weighted (/100)</th>
+                        <th>Final (/60)</th>
+                        <th>%</th>
+                        <th>Grade</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="scoreTableBody">
+                </tbody>
+                <tfoot id="scoreTableFoot" style="display: none;">
+                    <tr>
+                        <td colspan="3">Class Average</td>
+                        <td id="avgA">-</td>
+                        <td id="avgB">-</td>
+                        <td id="avgC">-</td>
+                        <td id="avgWeighted">-</td>
+                        <td id="avgFinal">-</td>
+                        <td id="avgPercent">-</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="print-footer-info">
+            <div class="signature-row">
+                <div class="signature-line">
+                    <p>&nbsp;</p>
+                    <p>Class Teacher's Signature</p>
+                </div>
+                <div class="signature-line">
+                    <p>&nbsp;</p>
+                    <p>Head Teacher's Signature</p>
+                </div>
+                <div class="signature-line">
+                    <p>&nbsp;</p>
+                    <p>Date</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <a href="index.html" class="btn btn-home">
+                <i class="fas fa-home"></i> Back to Home
+            </a>
+            <button class="btn btn-clear" onclick="clearResults()">
+                <i class="fas fa-trash"></i> Clear All Data
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const gradeLabels = {
+            'grade1': 'Grade 1',
+            'grade2': 'Grade 2',
+            'grade3': 'Grade 3',
+            'grade4': 'Grade 4',
+            'grade5': 'Grade 5'
+        };
+
+        function getGradeClass(letter) {
+            if (letter.startsWith('A')) return 'grade-a';
+            if (letter === 'B') return 'grade-b';
+            if (letter === 'C') return 'grade-c';
+            if (letter === 'D') return 'grade-d';
+            return 'grade-f';
+        }
+
+        function loadResults() {
+            return JSON.parse(localStorage.getItem('examResults') || '[]');
+        }
+
+        function getFilteredResults() {
+            let results = loadResults();
+            
+            const classFilter = document.getElementById('classSelect').value;
+            const dateFilter = document.getElementById('dateFilter').value;
+            
+            if (classFilter) {
+                results = results.filter(r => r.grade === classFilter);
+            }
+            
+            if (dateFilter === 'today') {
+                const today = new Date().toDateString();
+                results = results.filter(r => new Date(r.date).toDateString() === today);
+            }
+            
+            // Sort by class, then by name
+            results.sort((a, b) => {
+                if (a.grade !== b.grade) return a.grade.localeCompare(b.grade);
+                return a.name.localeCompare(b.name);
+            });
+            
+            return results;
+        }
+
+        function renderTable() {
+            const results = getFilteredResults();
+            const tbody = document.getElementById('scoreTableBody');
+            const tfoot = document.getElementById('scoreTableFoot');
+            
+            if (results.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="11">
+                            <div class="no-data">
+                                <i class="fas fa-clipboard-list"></i>
+                                <h3>No exam results found</h3>
+                                <p>Students need to complete the ICT Mid-Term Exam first.<br>Results will appear here automatically.</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                tfoot.style.display = 'none';
+                updateStats(results);
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            results.forEach((r, index) => {
+                const gradeClass = getGradeClass(r.gradeLetter || 'F');
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${r.name}</td>
+                    <td>${gradeLabels[r.grade] || r.grade}</td>
+                    <td>${r.sectionA_raw !== undefined ? r.sectionA_raw : '-'}</td>
+                    <td>${r.sectionB_raw !== undefined ? r.sectionB_raw : '-'}</td>
+                    <td>${r.sectionC_raw !== undefined ? r.sectionC_raw : '-'}</td>
+                    <td>${r.weightedTotal !== undefined ? r.weightedTotal : '-'}</td>
+                    <td><strong>${r.finalOver60 !== undefined ? r.finalOver60 : '-'}</strong></td>
+                    <td>${r.percentage !== undefined ? r.percentage + '%' : '-'}</td>
+                    <td><span class="grade-cell ${gradeClass}">${r.gradeLetter || '-'}</span></td>
+                    <td>${r.dateFormatted || new Date(r.date).toLocaleDateString()}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Show footer with averages
+            tfoot.style.display = '';
+            const avgA = avg(results, 'sectionA_raw');
+            const avgB = avg(results, 'sectionB_raw');
+            const avgC = avg(results, 'sectionC_raw');
+            const avgW = avg(results, 'weightedTotal');
+            const avgF = avg(results, 'finalOver60');
+            const avgP = avg(results, 'percentage');
+            
+            document.getElementById('avgA').textContent = avgA;
+            document.getElementById('avgB').textContent = avgB;
+            document.getElementById('avgC').textContent = avgC;
+            document.getElementById('avgWeighted').textContent = avgW;
+            document.getElementById('avgFinal').textContent = avgF;
+            document.getElementById('avgPercent').textContent = avgP + '%';
+            
+            updateStats(results);
+        }
+
+        function avg(results, field) {
+            const validResults = results.filter(r => r[field] !== undefined);
+            if (validResults.length === 0) return '-';
+            const sum = validResults.reduce((acc, r) => acc + (r[field] || 0), 0);
+            return Math.round((sum / validResults.length) * 10) / 10;
+        }
+
+        function updateStats(results) {
+            document.getElementById('totalStudents').textContent = results.length;
+            
+            if (results.length === 0) {
+                document.getElementById('classAverage').textContent = '-';
+                document.getElementById('highestScore').textContent = '-';
+                document.getElementById('lowestScore').textContent = '-';
+                document.getElementById('passRate').textContent = '-';
+                return;
+            }
+            
+            const finals = results.map(r => r.finalOver60 || 0);
+            const percentages = results.map(r => r.percentage || 0);
+            
+            document.getElementById('classAverage').textContent = (finals.reduce((a, b) => a + b, 0) / finals.length).toFixed(1);
+            document.getElementById('highestScore').textContent = Math.max(...finals);
+            document.getElementById('lowestScore').textContent = Math.min(...finals);
+            
+            const passCount = percentages.filter(p => p >= 50).length;
+            document.getElementById('passRate').textContent = Math.round((passCount / results.length) * 100) + '%';
+        }
+
+        function downloadCSV() {
+            const results = getFilteredResults();
+            
+            if (results.length === 0) {
+                alert('No results to download. Please ensure students have completed the exam.');
+                return;
+            }
+            
+            const classFilter = document.getElementById('classSelect').value;
+            const className = classFilter ? gradeLabels[classFilter] : 'All_Classes';
+            
+            // CSV Header
+            let csv = 'S/N,Student Name,Class,Section A (/20),Section B (/20),Section C (/20),Weighted Total (/100),Final Score (/60),Percentage,Grade,Date\n';
+            
+            // CSV Data
+            results.forEach((r, index) => {
+                const name = `"${r.name}"`;
+                csv += `${index + 1},${name},${gradeLabels[r.grade] || r.grade},`;
+                csv += `${r.sectionA_raw || 0},${r.sectionB_raw || 0},${r.sectionC_raw || 0},`;
+                csv += `${r.weightedTotal || 0},${r.finalOver60 || 0},`;
+                csv += `${r.percentage || 0}%,${r.gradeLetter || '-'},`;
+                csv += `${r.dateFormatted || new Date(r.date).toLocaleDateString()}\n`;
+            });
+            
+            // Add averages row
+            csv += '\n';
+            csv += `,CLASS AVERAGE,,`;
+            csv += `${avg(results, 'sectionA_raw')},${avg(results, 'sectionB_raw')},${avg(results, 'sectionC_raw')},`;
+            csv += `${avg(results, 'weightedTotal')},${avg(results, 'finalOver60')},`;
+            csv += `${avg(results, 'percentage')}%,,\n`;
+            
+            // Download
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ICT_MidTerm_ScoreSheet_${className}_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearResults() {
+            if (confirm('Are you sure you want to clear ALL exam results? This cannot be undone!')) {
+                if (confirm('This will permanently delete all student scores. Are you absolutely sure?')) {
+                    localStorage.removeItem('examResults');
+                    renderTable();
+                    alert('All exam results have been cleared.');
+                }
+            }
+        }
+
+        // Populate date filter with unique dates
+        function populateDateFilter() {
+            const results = loadResults();
+            const dates = [...new Set(results.map(r => new Date(r.date).toDateString()))];
+            const dateSelect = document.getElementById('dateFilter');
+            
+            // Keep existing options
+            dates.sort((a, b) => new Date(b) - new Date(a));
+            dates.forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = new Date(date).toLocaleDateString('en-US', { 
+                    year: 'numeric', month: 'short', day: 'numeric' 
+                });
+                dateSelect.appendChild(option);
+            });
+        }
+
+        // Event listeners
+        document.getElementById('classSelect').addEventListener('change', renderTable);
+        document.getElementById('dateFilter').addEventListener('change', renderTable);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            populateDateFilter();
+            renderTable();
+        });
+    </script>
+</body>
+</html>

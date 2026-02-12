@@ -23,14 +23,15 @@
             
             <div class="user-form">
                 <div class="input-group">
-                    <label for="userName">👋 Student Name:</label>
-                    <input type="text" id="userName" placeholder="Enter your full name" required>
+                    <label for="userName">👋 Student Full Name:</label>
+                    <input type="text" id="userName" placeholder="Enter your first name and surname" required>
+                    <small id="nameError" style="color: #f44336; display: none; margin-top: 5px; font-weight: bold;">Please enter your full name (first name and surname)</small>
                 </div>
                 
                 <div class="input-group">
-                    <label for="userGrade">📚 Select Your Grade:</label>
+                    <label for="userGrade">📚 Select Your Class:</label>
                     <select id="userGrade" required>
-                        <option value="">Select your grade</option>
+                        <option value="">Select your class</option>
                         <option value="grade1">Grade 1</option>
                         <option value="grade2">Grade 2</option>
                         <option value="grade3">Grade 3</option>
@@ -39,7 +40,7 @@
                     </select>
                 </div>
                 
-                <button id="startExam" class="btn-primary">
+                <button id="startExam" class="btn-primary" disabled>
                     <i class="fas fa-check-circle"></i> Start Examination
                 </button>
             </div>
@@ -118,7 +119,7 @@
                     <div class="score-circle-large">
                         <div class="score-percentage" id="scorePercentage">0%</div>
                         <div class="score-details">
-                            <span id="finalScore">0</span> / <span id="totalMarks">25</span>
+                            <span id="finalScore">0</span> / <span id="totalMarks">60</span>
                         </div>
                     </div>
                 </div>
@@ -129,10 +130,36 @@
                 </div>
             </div>
 
+            <!-- Weighted Score Summary -->
+            <div class="weighted-score-summary" style="margin: 30px 0; padding: 25px; background: linear-gradient(145deg, #f0f4ff, #e8eeff); border-radius: 20px; border: 2px solid #667eea;">
+                <h3 style="color: #4a47a3; text-align: center; margin-bottom: 20px;">📊 Score Breakdown</h3>
+                <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden;">
+                    <thead>
+                        <tr style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+                            <th style="padding: 12px; text-align: left;">Section</th>
+                            <th style="padding: 12px; text-align: center;">Raw Score (/20)</th>
+                            <th style="padding: 12px; text-align: center;">Weight</th>
+                            <th style="padding: 12px; text-align: center;">Weighted Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weightedScoreBody">
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #f0f0f0; font-weight: bold;">
+                            <td style="padding: 12px;" colspan="3">Weighted Total (/100)</td>
+                            <td style="padding: 12px; text-align: center;" id="weightedTotal">0</td>
+                        </tr>
+                        <tr style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: bold; font-size: 1.2rem;">
+                            <td style="padding: 15px;" colspan="3">Final Score (/60)</td>
+                            <td style="padding: 15px; text-align: center;" id="finalScoreOver60">0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
             <div class="section-breakdown" id="sectionBreakdown">
                 <h3>📊 Performance by Section</h3>
                 <div class="breakdown-container" id="breakdownContainer">
-                    <!-- Section performance will be shown here -->
                 </div>
             </div>
 
@@ -143,7 +170,13 @@
 
             <div class="results-actions">
                 <button id="printResults" class="btn-primary">
-                    <i class="fas fa-print"></i> Print Results
+                    <i class="fas fa-print"></i> Print Report
+                </button>
+                <button id="downloadReport" class="btn-secondary" style="background: linear-gradient(135deg, #4caf50, #8bc34a);">
+                    <i class="fas fa-download"></i> Download Report
+                </button>
+                <button id="viewScoreSheet" class="btn-secondary" style="background: linear-gradient(135deg, #ff9800, #ffc107);">
+                    <i class="fas fa-list-alt"></i> Class Score Sheet
                 </button>
                 <button id="retakeExam" class="btn-secondary">
                     <i class="fas fa-redo"></i> Take Again
@@ -168,7 +201,7 @@
                 <span id="printStudentName" class="value"></span>
             </div>
             <div class="info-row">
-                <span class="label">Grade:</span>
+                <span class="label">Class:</span>
                 <span id="printGrade" class="value"></span>
             </div>
             <div class="info-row">
@@ -178,26 +211,28 @@
         </div>
 
         <div class="print-scores">
+            <h3 style="margin-bottom: 10px;">Section Scores</h3>
             <table class="scores-table">
                 <thead>
                     <tr>
                         <th>Section</th>
                         <th>Questions</th>
                         <th>Correct</th>
-                        <th>Marks Obtained</th>
-                        <th>Total Marks</th>
-                        <th>Percentage</th>
+                        <th>Raw Score (/20)</th>
+                        <th>Weight</th>
+                        <th>Weighted Score</th>
                     </tr>
                 </thead>
                 <tbody id="printScoresBody">
-                    <!-- Scores will be inserted here -->
                 </tbody>
                 <tfoot>
                     <tr class="total-row">
-                        <td colspan="3"><strong>Total</strong></td>
-                        <td id="printTotalObtained"><strong>0</strong></td>
-                        <td id="printTotalMarks"><strong>25</strong></td>
-                        <td id="printOverallPercentage"><strong>0%</strong></td>
+                        <td colspan="5"><strong>Weighted Total (/100)</strong></td>
+                        <td id="printWeightedTotal"><strong>0</strong></td>
+                    </tr>
+                    <tr class="total-row" style="background: #667eea; color: white;">
+                        <td colspan="5"><strong>Final Score (/60)</strong></td>
+                        <td id="printFinalOver60"><strong>0</strong></td>
                     </tr>
                 </tfoot>
             </table>

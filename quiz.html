@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids Digital Literacy Quiz 🎮</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcomeScreen" class="screen active">
+        <div class="welcome-container">
+            <h1 class="title">🎮 Kids Digital Quiz Adventure! 🚀</h1>
+            <div class="welcome-animation">
+                <div class="floating-icon">💻</div>
+                <div class="floating-icon">🎯</div>
+                <div class="floating-icon">🌟</div>
+            </div>
+            <p class="subtitle">Test your computer and coding knowledge!</p>
+            
+            <div class="user-form">
+                <div class="input-group">
+                    <label for="userName">👋 What's your name?</label>
+                    <input type="text" id="userName" placeholder="Enter your awesome name here!" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="userAge">� Choose your quiz level:</label>
+                    <select id="userAge" required>
+                        <option value="">Choose your quiz level</option>
+                        <option value="5">5 years old</option>
+                        <option value="9">9 years old</option>
+                        <option value="11">11 years old</option>
+                        <option value="grade5">Grade 5 ICT Quiz</option>
+                    </select>
+                </div>
+                
+                <button id="startQuiz" class="btn-primary">
+                    <i class="fas fa-rocket"></i> Start My Adventure!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quiz Screen -->
+    <div id="quizScreen" class="screen">
+        <div class="quiz-header">
+            <div class="score-display">
+                <div class="score-item correct">
+                    <span class="emoji">💚</span>
+                    <span id="correctCount" class="count">0</span>
+                </div>
+                <div class="score-item incorrect">
+                    <span class="emoji">❤️</span>
+                    <span id="incorrectCount" class="count">0</span>
+                </div>
+            </div>
+            
+            <div class="user-info">
+                <span id="displayName" class="user-name"></span>
+                <span id="displayAge" class="user-age"></span>
+            </div>
+            
+            <div class="progress">
+                <span id="questionNumber">1</span> / <span id="totalQuestions">50</span>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="quiz-container">
+            <div class="question-section">
+                <div id="categoryBadge" class="category-badge"></div>
+                <h2 id="questionText" class="question-text"></h2>
+            </div>
+
+            <div id="answersContainer" class="answers-container">
+                <!-- Answer options will be dynamically generated -->
+            </div>
+
+            <div class="quiz-controls">
+                <button id="nextQuestion" class="btn-primary" disabled>
+                    Next Question <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Feedback Animation -->
+        <div id="feedbackAnimation" class="feedback-animation">
+            <div class="feedback-content">
+                <div class="feedback-emoji"></div>
+                <div class="feedback-text"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="resultsScreen" class="screen">
+        <div class="results-container">
+            <h1 class="results-title">🎉 Quiz Complete! 🎉</h1>
+            
+            <div class="final-score">
+                <div class="score-summary">
+                    <div class="score-circle">
+                        <div class="score-percentage" id="scorePercentage">0%</div>
+                        <div class="score-label">Overall Score</div>
+                    </div>
+                </div>
+                
+                <div class="score-breakdown">
+                    <div class="score-item">
+                        <span class="emoji">💚</span>
+                        <span class="label">Correct</span>
+                        <span id="finalCorrect" class="value">0</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="emoji">❤️</span>
+                        <span class="label">Incorrect</span>
+                        <span id="finalIncorrect" class="value">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="categoryAnalysis" class="category-analysis">
+                <h3>📊 Your Performance by Category</h3>
+                <div id="categoryCharts" class="category-charts">
+                    <!-- Category performance charts will be generated here -->
+                </div>
+            </div>
+
+            <div class="results-actions">
+                <button id="retakeQuiz" class="btn-secondary">
+                    <i class="fas fa-redo"></i> Take Quiz Again
+                </button>
+                <button id="viewAllResults" class="btn-primary">
+                    <i class="fas fa-chart-bar"></i> View All My Results
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Results Screen -->
+    <div id="allResultsScreen" class="screen">
+        <div class="all-results-container">
+            <h1>📈 All Quiz Results</h1>
+            <div id="allResultsList" class="all-results-list">
+                <!-- Previous results will be displayed here -->
+            </div>
+            <button id="backToResults" class="btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Current Results
+            </button>
+        </div>
+    </div>
+
+    <script src="quiz-data.js"></script>
+    <script src="quiz-app.js"></script>
+</body>
+</html>

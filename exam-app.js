@@ -1,4 +1,4 @@
-// ICT Examination Application
+// ICT Examination Application - Enhanced with Weighted Scoring & Score Sheets
 class ExamApp {
     constructor() {
         this.student = {
@@ -14,6 +14,7 @@ class ExamApp {
         this.sectionNames = ['objectives', 'fillBlanks', 'theory'];
         this.answers = [];
         this.sectionScores = {};
+        this.weightedScores = {};
         this.startTime = null;
         
         this.initializeApp();
@@ -36,6 +37,10 @@ class ExamApp {
         // Results screen events
         document.getElementById('printResults').addEventListener('click', () => this.printResults());
         document.getElementById('retakeExam').addEventListener('click', () => this.retakeExam());
+        document.getElementById('downloadReport').addEventListener('click', () => this.downloadStudentReport());
+        document.getElementById('viewScoreSheet').addEventListener('click', () => {
+            window.open('scoresheet.html', '_blank');
+        });
 
         // Handle enter key
         document.getElementById('userName').addEventListener('keypress', (e) => {
@@ -47,8 +52,21 @@ class ExamApp {
         const nameInput = document.getElementById('userName');
         const gradeSelect = document.getElementById('userGrade');
         const startButton = document.getElementById('startExam');
+        const nameError = document.getElementById('nameError');
         
-        const isValid = nameInput.value.trim() !== '' && gradeSelect.value !== '';
+        const name = nameInput.value.trim();
+        const nameParts = name.split(/\s+/).filter(p => p.length > 0);
+        const nameValid = nameParts.length >= 2; // Require at least first name + surname
+        const gradeValid = gradeSelect.value !== '';
+        
+        // Show/hide name validation error
+        if (name.length > 0 && !nameValid) {
+            nameError.style.display = 'block';
+        } else {
+            nameError.style.display = 'none';
+        }
+        
+        const isValid = nameValid && gradeValid;
         startButton.disabled = !isValid;
         
         if (isValid) {
@@ -62,18 +80,26 @@ class ExamApp {
         const nameInput = document.getElementById('userName');
         const gradeSelect = document.getElementById('userGrade');
         
-        if (nameInput.value.trim() === '' || gradeSelect.value === '') {
-            this.showNotification('Please enter your name and select your grade!', 'error');
+        const name = nameInput.value.trim();
+        const nameParts = name.split(/\s+/).filter(p => p.length > 0);
+        
+        if (nameParts.length < 2) {
+            this.showNotification('Please enter your full name (first name and surname)!', 'error');
+            return;
+        }
+        
+        if (gradeSelect.value === '') {
+            this.showNotification('Please select your class!', 'error');
             return;
         }
 
-        this.student.name = nameInput.value.trim();
+        this.student.name = name;
         this.student.grade = gradeSelect.value;
         
         // Load exam data
         this.examData = getExamData(this.student.grade);
         if (!this.examData) {
-            this.showNotification('Exam data not available for this grade!', 'error');
+            this.showNotification('Exam data not available for this class!', 'error');
             return;
         }
 
@@ -83,6 +109,7 @@ class ExamApp {
         this.currentQuestionIndex = 0;
         this.answers = [];
         this.sectionScores = {};
+        this.weightedScores = {};
         
         // Load first section
         this.loadSection(this.sectionNames[0]);
@@ -119,7 +146,6 @@ class ExamApp {
 
     displayQuestion() {
         if (this.currentQuestionIndex >= this.allQuestions.length) {
-            // Move to next section or show results
             this.moveToNextSection();
             return;
         }
@@ -129,7 +155,7 @@ class ExamApp {
         
         // Update section info
         document.getElementById('sectionTitle').textContent = this.currentSection.title;
-        document.getElementById('sectionMarks').textContent = `${this.currentSection.marks} Marks`;
+        document.getElementById('sectionMarks').textContent = '20 Marks';
         document.getElementById('currentSection').textContent = this.getSectionLabel();
         
         // Update question counter
@@ -213,7 +239,6 @@ class ExamApp {
         inputDiv.appendChild(input);
         container.appendChild(inputDiv);
         
-        // Focus on input
         setTimeout(() => input.focus(), 100);
     }
 
@@ -244,7 +269,6 @@ class ExamApp {
         inputDiv.appendChild(textarea);
         container.appendChild(inputDiv);
         
-        // Focus on textarea
         setTimeout(() => textarea.focus(), 100);
     }
 
@@ -254,13 +278,10 @@ class ExamApp {
             option.classList.remove('selected');
         });
         
-        // Mark current selection
         selectedElement.classList.add('selected');
         
-        // Check if answer is correct
         const isCorrect = selectedIndex === question.correct;
         
-        // Store the answer
         this.answers.push({
             section: this.currentSectionName,
             questionIndex: this.currentQuestionIndex,
@@ -271,13 +292,9 @@ class ExamApp {
             explanation: question.explanation
         });
         
-        // Show feedback
         this.showAnswerFeedback(isCorrect, question.explanation);
-        
-        // Enable next button
         document.getElementById('nextQuestion').disabled = false;
         
-        // Highlight correct/incorrect after delay
         setTimeout(() => {
             this.highlightCorrectAnswer(question.correct, selectedIndex);
         }, 800);
@@ -292,7 +309,6 @@ class ExamApp {
             } else if (index === selectedIndex && selectedIndex !== correctIndex) {
                 option.classList.add('incorrect');
             }
-            // Disable clicking
             option.style.pointerEvents = 'none';
         });
     }
@@ -359,7 +375,6 @@ class ExamApp {
             });
         }
         
-        // Move to next question
         this.currentQuestionIndex++;
         this.displayQuestion();
     }
@@ -368,12 +383,10 @@ class ExamApp {
         this.currentSectionIndex++;
         
         if (this.currentSectionIndex < this.sectionNames.length) {
-            // Load next section
             const nextSection = this.sectionNames[this.currentSectionIndex];
             this.loadSection(nextSection);
             this.displayQuestion();
         } else {
-            // All sections complete, show results
             this.calculateResults();
             this.showResults();
         }
@@ -394,37 +407,60 @@ class ExamApp {
         return total;
     }
 
+    // ============================================
+    // WEIGHTED SCORING SYSTEM
+    // Each section is scored out of 20
+    // Section A (Objectives): weight ×1 = /20
+    // Section B (Fill-in-Blanks): weight ×2 = /40
+    // Section C (Theory): weight ×2 = /40
+    // Weighted Total = /100
+    // Final Score = Weighted Total × 60/100 = /60
+    // ============================================
     calculateResults() {
-        // Calculate score for each section
         this.sectionScores = {};
         
         for (const sectionName of this.sectionNames) {
             const sectionAnswers = this.answers.filter(a => a.section === sectionName);
             const correct = sectionAnswers.filter(a => a.isCorrect).length;
             const total = sectionAnswers.length;
-            const marks = this.examData.sections[sectionName].marks;
-            const marksObtained = (correct / total) * marks;
+            
+            // Each section is standardized to 20 marks
+            const rawScore = total > 0 ? Math.round((correct / total) * 20 * 10) / 10 : 0;
             
             this.sectionScores[sectionName] = {
                 correct: correct,
                 total: total,
-                marks: marks,
-                marksObtained: Math.round(marksObtained * 10) / 10,
-                percentage: Math.round((marksObtained / marks) * 100)
+                rawScore: rawScore,
+                maxScore: 20,
+                percentage: Math.round((rawScore / 20) * 100)
             };
         }
+        
+        // Calculate weighted scores
+        const aScore = this.sectionScores.objectives ? this.sectionScores.objectives.rawScore : 0;
+        const bScore = this.sectionScores.fillBlanks ? this.sectionScores.fillBlanks.rawScore : 0;
+        const cScore = this.sectionScores.theory ? this.sectionScores.theory.rawScore : 0;
+        
+        const weightedA = Math.round(aScore * 10) / 10;          // ×1, max 20
+        const weightedB = Math.round(bScore * 2 * 10) / 10;      // ×2, max 40
+        const weightedC = Math.round(cScore * 2 * 10) / 10;      // ×2, max 40
+        const weightedTotal = Math.round((weightedA + weightedB + weightedC) * 10) / 10; // max 100
+        const finalOver60 = Math.round((weightedTotal / 100) * 60 * 10) / 10; // convert to /60
+        
+        this.weightedScores = {
+            sectionA: { raw: aScore, weight: 1, weighted: weightedA, maxWeighted: 20 },
+            sectionB: { raw: bScore, weight: 2, weighted: weightedB, maxWeighted: 40 },
+            sectionC: { raw: cScore, weight: 2, weighted: weightedC, maxWeighted: 40 },
+            weightedTotal: weightedTotal,
+            maxWeightedTotal: 100,
+            finalOver60: finalOver60,
+            maxFinal: 60
+        };
     }
 
     showResults() {
-        // Calculate overall score
-        const totalMarks = this.examData.totalMarks;
-        let totalObtained = 0;
-        
-        for (const sectionName in this.sectionScores) {
-            totalObtained += this.sectionScores[sectionName].marksObtained;
-        }
-        
-        const percentage = Math.round((totalObtained / totalMarks) * 100);
+        const ws = this.weightedScores;
+        const percentage = Math.round((ws.finalOver60 / 60) * 100);
         const grade = this.calculateGrade(percentage);
         
         // Display student info
@@ -436,18 +472,20 @@ class ExamApp {
             day: 'numeric'
         });
         
-        // Display overall score
+        // Display overall score (final over 60)
         document.getElementById('scorePercentage').textContent = percentage + '%';
-        document.getElementById('finalScore').textContent = totalObtained.toFixed(1);
-        document.getElementById('totalMarks').textContent = totalMarks;
+        document.getElementById('finalScore').textContent = ws.finalOver60;
+        document.getElementById('totalMarks').textContent = '60';
         
         // Display grade
         document.getElementById('gradeBadge').textContent = grade.letter;
         document.getElementById('gradeLabel').textContent = grade.remark;
         
-        // Apply grade color
         const gradeBadge = document.getElementById('gradeBadge');
         gradeBadge.style.background = grade.color;
+        
+        // Display weighted score breakdown table
+        this.displayWeightedScoreTable();
         
         // Display section breakdown
         this.displaySectionBreakdown();
@@ -460,6 +498,31 @@ class ExamApp {
         
         // Save results
         this.saveResults();
+    }
+
+    displayWeightedScoreTable() {
+        const tbody = document.getElementById('weightedScoreBody');
+        tbody.innerHTML = '';
+        
+        const sections = [
+            { name: 'Section A: Objectives', key: 'sectionA', raw: this.weightedScores.sectionA },
+            { name: 'Section B: Fill in the Blanks', key: 'sectionB', raw: this.weightedScores.sectionB },
+            { name: 'Section C: Theory', key: 'sectionC', raw: this.weightedScores.sectionC }
+        ];
+        
+        sections.forEach(section => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="padding: 12px; text-align: left; font-weight: 600;">${section.name}</td>
+                <td style="padding: 12px; text-align: center;">${section.raw.raw}</td>
+                <td style="padding: 12px; text-align: center;">×${section.raw.weight}</td>
+                <td style="padding: 12px; text-align: center; font-weight: bold;">${section.raw.weighted} / ${section.raw.maxWeighted}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        document.getElementById('weightedTotal').textContent = this.weightedScores.weightedTotal;
+        document.getElementById('finalScoreOver60').textContent = this.weightedScores.finalOver60;
     }
 
     calculateGrade(percentage) {
@@ -483,31 +546,38 @@ class ExamApp {
         container.innerHTML = '';
         
         const sectionLabels = {
-            'objectives': 'Section A: Objectives',
-            'fillBlanks': 'Section B: Fill in the Blanks',
-            'theory': 'Section C: Theory'
+            'objectives': { label: 'Section A: Objectives', weight: '×1' },
+            'fillBlanks': { label: 'Section B: Fill in the Blanks', weight: '×2' },
+            'theory': { label: 'Section C: Theory', weight: '×2' }
         };
+        
+        const weightedKeys = { 'objectives': 'sectionA', 'fillBlanks': 'sectionB', 'theory': 'sectionC' };
         
         for (const sectionName in this.sectionScores) {
             const score = this.sectionScores[sectionName];
+            const ws = this.weightedScores[weightedKeys[sectionName]];
             
             const sectionDiv = document.createElement('div');
             sectionDiv.className = 'section-score-card';
             
             sectionDiv.innerHTML = `
-                <div class="section-name">${sectionLabels[sectionName]}</div>
+                <div class="section-name">${sectionLabels[sectionName].label}</div>
                 <div class="section-stats">
                     <div class="stat">
                         <span class="stat-label">Questions:</span>
                         <span class="stat-value">${score.correct}/${score.total}</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-label">Marks:</span>
-                        <span class="stat-value">${score.marksObtained}/${score.marks}</span>
+                        <span class="stat-label">Raw Score:</span>
+                        <span class="stat-value">${score.rawScore}/20</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-label">Percentage:</span>
-                        <span class="stat-value">${score.percentage}%</span>
+                        <span class="stat-label">Weight:</span>
+                        <span class="stat-value">${sectionLabels[sectionName].weight}</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Weighted:</span>
+                        <span class="stat-value">${ws.weighted}/${ws.maxWeighted}</span>
                     </div>
                 </div>
                 <div class="section-progress-bar">
@@ -549,76 +619,126 @@ class ExamApp {
     }
 
     printResults() {
-        // Populate print view with data
-        const totalMarks = this.examData.totalMarks;
-        let totalObtained = 0;
-        
-        for (const sectionName in this.sectionScores) {
-            totalObtained += this.sectionScores[sectionName].marksObtained;
-        }
-        
-        const percentage = Math.round((totalObtained / totalMarks) * 100);
+        const ws = this.weightedScores;
+        const percentage = Math.round((ws.finalOver60 / 60) * 100);
         const grade = this.calculateGrade(percentage);
         
         document.getElementById('printStudentName').textContent = this.student.name;
         document.getElementById('printGrade').textContent = this.getGradeLabel(this.student.grade);
         document.getElementById('printDate').textContent = new Date().toLocaleDateString();
         
-        // Populate scores table
+        // Populate scores table with weighted scoring
         const tbody = document.getElementById('printScoresBody');
         tbody.innerHTML = '';
         
-        const sectionLabels = {
-            'objectives': 'Section A: Objectives',
-            'fillBlanks': 'Section B: Fill in the Blanks',
-            'theory': 'Section C: Theory'
-        };
+        const sections = [
+            { name: 'Section A: Objectives', sectionKey: 'objectives', wsKey: 'sectionA' },
+            { name: 'Section B: Fill in the Blanks', sectionKey: 'fillBlanks', wsKey: 'sectionB' },
+            { name: 'Section C: Theory', sectionKey: 'theory', wsKey: 'sectionC' }
+        ];
         
-        for (const sectionName in this.sectionScores) {
-            const score = this.sectionScores[sectionName];
+        sections.forEach(section => {
+            const score = this.sectionScores[section.sectionKey];
+            const wsSection = ws[section.wsKey];
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${sectionLabels[sectionName]}</td>
+                <td>${section.name}</td>
                 <td>${score.total}</td>
                 <td>${score.correct}</td>
-                <td>${score.marksObtained.toFixed(1)}</td>
-                <td>${score.marks}</td>
-                <td>${score.percentage}%</td>
+                <td>${score.rawScore}</td>
+                <td>×${wsSection.weight}</td>
+                <td>${wsSection.weighted} / ${wsSection.maxWeighted}</td>
             `;
             tbody.appendChild(row);
-        }
+        });
         
-        document.getElementById('printTotalObtained').innerHTML = `<strong>${totalObtained.toFixed(1)}</strong>`;
-        document.getElementById('printTotalMarks').innerHTML = `<strong>${totalMarks}</strong>`;
-        document.getElementById('printOverallPercentage').innerHTML = `<strong>${percentage}%</strong>`;
+        document.getElementById('printWeightedTotal').innerHTML = `<strong>${ws.weightedTotal}</strong>`;
+        document.getElementById('printFinalOver60').innerHTML = `<strong>${ws.finalOver60}</strong>`;
         
         document.getElementById('printGradeLetter').textContent = grade.letter;
         document.getElementById('printGradeRemark').textContent = grade.remark;
-        
         document.getElementById('printRemarks').textContent = document.getElementById('remarksBox').textContent;
         
-        // Trigger print
         window.print();
     }
 
+    // Download individual student report as text file
+    downloadStudentReport() {
+        const ws = this.weightedScores;
+        const percentage = Math.round((ws.finalOver60 / 60) * 100);
+        const grade = this.calculateGrade(percentage);
+        
+        let report = '';
+        report += '================================================\n';
+        report += '     ICT MID-TERM EXAMINATION REPORT\n';
+        report += '     Primary School ICT Department\n';
+        report += '     Academic Session 2025/2026 - Mid-Term\n';
+        report += '================================================\n\n';
+        report += `Student Name: ${this.student.name}\n`;
+        report += `Class: ${this.getGradeLabel(this.student.grade)}\n`;
+        report += `Date: ${new Date().toLocaleDateString()}\n\n`;
+        report += '--- SCORE BREAKDOWN ---\n\n';
+        report += 'Section                    Raw(/20)  Weight  Weighted\n';
+        report += '-----------------------------------------------------\n';
+        report += `Section A: Objectives      ${this.padNum(ws.sectionA.raw)}       ×1      ${this.padNum(ws.sectionA.weighted)}/${ws.sectionA.maxWeighted}\n`;
+        report += `Section B: Fill-in-Blanks  ${this.padNum(ws.sectionB.raw)}       ×2      ${this.padNum(ws.sectionB.weighted)}/${ws.sectionB.maxWeighted}\n`;
+        report += `Section C: Theory          ${this.padNum(ws.sectionC.raw)}       ×2      ${this.padNum(ws.sectionC.weighted)}/${ws.sectionC.maxWeighted}\n`;
+        report += '-----------------------------------------------------\n';
+        report += `Weighted Total:                            ${ws.weightedTotal}/100\n`;
+        report += `Final Score:                               ${ws.finalOver60}/60\n`;
+        report += `Grade: ${grade.letter} - ${grade.remark}\n`;
+        report += `Percentage: ${percentage}%\n\n`;
+        report += '--- REMARKS ---\n';
+        report += document.getElementById('remarksBox').textContent + '\n\n';
+        report += '================================================\n';
+        
+        const blob = new Blob([report], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${this.student.name.replace(/\s+/g, '_')}_${this.student.grade}_ICT_Report.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    padNum(num) {
+        return String(num).padStart(5, ' ');
+    }
+
     saveResults() {
+        const ws = this.weightedScores;
+        const percentage = Math.round((ws.finalOver60 / 60) * 100);
+        const grade = this.calculateGrade(percentage);
+        
         const result = {
             name: this.student.name,
             grade: this.student.grade,
+            gradeLabel: this.getGradeLabel(this.student.grade),
             date: new Date().toISOString(),
-            totalMarks: this.examData.totalMarks,
-            totalObtained: Object.values(this.sectionScores).reduce((sum, s) => sum + s.marksObtained, 0),
-            percentage: Math.round((Object.values(this.sectionScores).reduce((sum, s) => sum + s.marksObtained, 0) / this.examData.totalMarks) * 100),
+            dateFormatted: new Date().toLocaleDateString(),
+            sectionA_raw: ws.sectionA.raw,
+            sectionA_weighted: ws.sectionA.weighted,
+            sectionB_raw: ws.sectionB.raw,
+            sectionB_weighted: ws.sectionB.weighted,
+            sectionC_raw: ws.sectionC.raw,
+            sectionC_weighted: ws.sectionC.weighted,
+            weightedTotal: ws.weightedTotal,
+            finalOver60: ws.finalOver60,
+            percentage: percentage,
+            gradeLetter: grade.letter,
+            gradeRemark: grade.remark,
             sectionScores: this.sectionScores,
             answers: this.answers,
             duration: new Date() - this.startTime
         };
         
+        // Save to localStorage under 'examResults'
         let allResults = JSON.parse(localStorage.getItem('examResults') || '[]');
         allResults.push(result);
         
-        if (allResults.length > 100) {
-            allResults = allResults.slice(-100);
+        // Keep up to 500 results
+        if (allResults.length > 500) {
+            allResults = allResults.slice(-500);
         }
         
         localStorage.setItem('examResults', JSON.stringify(allResults));
@@ -626,9 +746,11 @@ class ExamApp {
 
     retakeExam() {
         this.showScreen('welcomeScreen');
-        document.getElementById('userName').value = this.student.name;
+        document.getElementById('userName').value = '';
         document.getElementById('userGrade').value = '';
-        this.validateForm();
+        document.getElementById('startExam').disabled = true;
+        const nameError = document.getElementById('nameError');
+        if (nameError) nameError.style.display = 'none';
     }
 
     showScreen(screenId) {
@@ -662,7 +784,9 @@ class ExamApp {
         setTimeout(() => {
             notification.style.animation = 'slideOutRight 0.3s ease-in';
             setTimeout(() => {
-                document.body.removeChild(notification);
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
             }, 300);
         }, 3000);
     }
