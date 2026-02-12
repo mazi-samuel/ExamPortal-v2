@@ -1,1 +1,72 @@
-[]
+[
+  {
+    "name": "Aisha Bello",
+    "grade": "grade5",
+    "gradeLabel": "Grade 5",
+    "date": "2026-02-12T08:30:00.000Z",
+    "dateFormatted": "12/02/2026",
+    "sectionA_raw": 26,
+    "sectionB_raw": 13,
+    "sectionC_raw": 14,
+    "finalOver60": 53,
+    "percentage": 88,
+    "gradeLetter": "A",
+    "gradeRemark": "Excellent!"
+  },
+  {
+    "name": "Daniel Okafor",
+    "grade": "grade4",
+    "gradeLabel": "Grade 4",
+    "date": "2026-02-11T10:10:00.000Z",
+    "dateFormatted": "11/02/2026",
+    "sectionA_raw": 21,
+    "sectionB_raw": 11,
+    "sectionC_raw": 12,
+    "finalOver60": 44,
+    "percentage": 73,
+    "gradeLetter": "B",
+    "gradeRemark": "Very Good!"
+  },
+  {
+    "name": "Grace Musa",
+    "grade": "grade3",
+    "gradeLabel": "Grade 3",
+    "date": "2026-02-12T09:15:00.000Z",
+    "dateFormatted": "12/02/2026",
+    "sectionA_raw": 18,
+    "sectionB_raw": 9,
+    "sectionC_raw": 10,
+    "finalOver60": 37,
+    "percentage": 62,
+    "gradeLetter": "C",
+    "gradeRemark": "Good!"
+  },
+  {
+    "name": "John Peter",
+    "grade": "grade2",
+    "gradeLabel": "Grade 2",
+    "date": "2026-02-10T12:00:00.000Z",
+    "dateFormatted": "10/02/2026",
+    "sectionA_raw": 12,
+    "sectionB_raw": 8,
+    "sectionC_raw": 6,
+    "finalOver60": 26,
+    "percentage": 43,
+    "gradeLetter": "F",
+    "gradeRemark": "Needs Improvement"
+  },
+  {
+    "name": "Mercy Afolabi",
+    "grade": "grade5",
+    "gradeLabel": "Grade 5",
+    "date": "2026-02-12T11:25:00.000Z",
+    "dateFormatted": "12/02/2026",
+    "sectionA_raw": 29,
+    "sectionB_raw": 15,
+    "sectionC_raw": 15,
+    "finalOver60": 59,
+    "percentage": 98,
+    "gradeLetter": "A+",
+    "gradeRemark": "Outstanding!"
+  }
+]
