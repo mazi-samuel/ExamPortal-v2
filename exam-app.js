@@ -728,17 +728,30 @@ class ExamApp {
             answers: this.answers,
             duration: new Date() - this.startTime
         };
-        
-        // Save to localStorage under 'examResults'
-        let allResults = JSON.parse(localStorage.getItem('examResults') || '[]');
-        allResults.push(result);
-        
-        // Keep up to 500 results
-        if (allResults.length > 500) {
-            allResults = allResults.slice(-500);
+
+        // 1) Try to POST to server API (centralized storage). If server unavailable, fall back to localStorage.
+        fetch('/api/results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(result)
+        }).then(r => {
+            if (!r.ok) throw new Error('Server rejected result');
+            return r.json();
+        }).then(json => {
+            console.log('Saved to server:', json);
+            // still keep a local copy for offline access
+            saveLocally(result);
+        }).catch(err => {
+            console.warn('Could not save to server, storing locally instead.', err);
+            saveLocally(result);
+        });
+
+        function saveLocally(res) {
+            let allResults = JSON.parse(localStorage.getItem('examResults') || '[]');
+            allResults.push(res);
+            if (allResults.length > 500) allResults = allResults.slice(-500);
+            localStorage.setItem('examResults', JSON.stringify(allResults));
         }
-        
-        localStorage.setItem('examResults', JSON.stringify(allResults));
     }
 
     retakeExam() {

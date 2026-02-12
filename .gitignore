@@ -1,0 +1,14 @@
+# Node modules
+node_modules/
+
+# Local data (results stored on server)
+data/results.json
+
+# Logs
+npm-debug.log*
+
+# Env
+.env
+
+# VSCode
+.vscode/

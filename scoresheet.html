@@ -493,31 +493,44 @@
             return 'grade-f';
         }
 
-        function loadResults() {
+        async function loadResults() {
+            // Try server first
+            try {
+                const resp = await fetch('/api/results');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) return data;
+                }
+            } catch (e) {
+                // server not available or fetch failed — fallback to localStorage
+                console.warn('Could not fetch results from server, using localStorage fallback.', e);
+            }
+
+            // Fallback: return localStorage results
             return JSON.parse(localStorage.getItem('examResults') || '[]');
         }
 
-        function getFilteredResults() {
-            let results = loadResults();
-            
+        async function getFilteredResults() {
+            let results = await loadResults();
+
             const classFilter = document.getElementById('classSelect').value;
             const dateFilter = document.getElementById('dateFilter').value;
-            
+
             if (classFilter) {
                 results = results.filter(r => r.grade === classFilter);
             }
-            
+
             if (dateFilter === 'today') {
                 const today = new Date().toDateString();
                 results = results.filter(r => new Date(r.date).toDateString() === today);
             }
-            
+
             // Sort by final score (highest → lowest), then by name
             results.sort((a, b) => {
                 if ((b.finalOver60 || 0) !== (a.finalOver60 || 0)) return (b.finalOver60 || 0) - (a.finalOver60 || 0);
                 return a.name.localeCompare(b.name);
             });
-            
+
             return results;
         }
 
@@ -555,6 +568,12 @@
                     <td>${r.sectionA_raw !== undefined ? r.sectionA_raw : '-'}</td>
                     <td>${r.sectionB_raw !== undefined ? r.sectionB_raw : '-'}</td>
                     <td>${r.sectionC_raw !== undefined ? r.sectionC_raw : '-'}</td>
+                    <td><strong>${r.finalOver60 !== undefined ? r.finalOver60 : '-'}</strong></td>
+                    <td>${r.percentage !== undefined ? r.percentage + '%' : '-'}</td>
+                    <td><span class="grade-cell ${gradeClass}">${r.gradeLetter || '-'}</span></td>
+                    <td>${r.dateFormatted || new Date(r.date).toLocaleDateString()}</td>
+                `;
+                tbody.appendChild(row);
 
             const avgA = avg(results, 'sectionA_raw');
             const avgB = avg(results, 'sectionB_raw');
@@ -600,10 +619,10 @@
             document.getElementById('passRate').textContent = Math.round((passCount / results.length) * 100) + '%';
         }
 
-        function downloadCSV() {
-            const results = getFilteredResults();
-            
-            if (results.length === 0) {
+        async function downloadCSV() {
+            const results = await getFilteredResults();
+
+            if (!results || results.length === 0) {
                 alert('No results to download. Please ensure students have completed the exam.');
                 return;
             }
@@ -641,20 +660,27 @@
             URL.revokeObjectURL(url);
         }
 
-        function clearResults() {
-            if (confirm('Are you sure you want to clear ALL exam results? This cannot be undone!')) {
-                if (confirm('This will permanently delete all student scores. Are you absolutely sure?')) {
-                    localStorage.removeItem('examResults');
-                    renderTable();
-                    alert('All exam results have been cleared.');
-                }
+        async function clearResults() {
+            if (!confirm('Are you sure you want to clear ALL exam results? This cannot be undone!')) return;
+            if (!confirm('This will permanently delete all student scores. Are you absolutely sure?')) return;
+
+            // Try server-side clear first; if it fails, still clear localStorage
+            try {
+                const resp = await fetch('/api/results', { method: 'DELETE' });
+                if (!resp.ok) throw new Error('Server delete failed');
+            } catch (e) {
+                console.warn('Server clear failed (server down?). Clearing local cache only.', e);
             }
+
+            localStorage.removeItem('examResults');
+            await renderTable();
+            alert('All exam results have been cleared.');
         }
 
         // Populate date filter with unique dates
-        function populateDateFilter() {
-            const results = loadResults();
-            const dates = [...new Set(results.map(r => new Date(r.date).toDateString()))];
+        async function populateDateFilter() {
+            const results = await loadResults();
+            const dates = [...new Set((results || []).map(r => new Date(r.date).toDateString()))];
             const dateSelect = document.getElementById('dateFilter');
             
             // Keep existing options
@@ -670,13 +696,13 @@
         }
 
         // Event listeners
-        document.getElementById('classSelect').addEventListener('change', renderTable);
-        document.getElementById('dateFilter').addEventListener('change', renderTable);
+        document.getElementById('classSelect').addEventListener('change', () => renderTable());
+        document.getElementById('dateFilter').addEventListener('change', () => renderTable());
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            populateDateFilter();
-            renderTable();
+        document.addEventListener('DOMContentLoaded', async () => {
+            await populateDateFilter();
+            await renderTable();
         });
     </script>
 </body>
