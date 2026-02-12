@@ -155,7 +155,8 @@ class ExamApp {
         
         // Update section info
         document.getElementById('sectionTitle').textContent = this.currentSection.title;
-        document.getElementById('sectionMarks').textContent = '20 Marks';
+        // show actual marks for the current section (uses values from exam-data.js)
+        document.getElementById('sectionMarks').textContent = (this.currentSection.marks || 0) + ' Marks';
         document.getElementById('currentSection').textContent = this.getSectionLabel();
         
         // Update question counter
@@ -408,52 +409,49 @@ class ExamApp {
     }
 
     // ============================================
-    // WEIGHTED SCORING SYSTEM
-    // Each section is scored out of 20
-    // Section A (Objectives): weight ×1 = /20
-    // Section B (Fill-in-Blanks): weight ×2 = /40
-    // Section C (Theory): weight ×2 = /40
-    // Weighted Total = /100
-    // Final Score = Weighted Total × 60/100 = /60
+    // SCORING RULES (USER REQUEST)
+    // Section A (Objectives) = 30 marks
+    // Section B (Fill in the Gap) = 15 marks
+    // Section C (Theory) = 15 marks
+    // Total = 60 marks (final score)
     // ============================================
     calculateResults() {
         this.sectionScores = {};
-        
+
+        // compute raw section scores scaled to section.marks defined in exam-data.js
         for (const sectionName of this.sectionNames) {
             const sectionAnswers = this.answers.filter(a => a.section === sectionName);
             const correct = sectionAnswers.filter(a => a.isCorrect).length;
             const total = sectionAnswers.length;
-            
-            // Each section is standardized to 20 marks
-            const rawScore = total > 0 ? Math.round((correct / total) * 20 * 10) / 10 : 0;
-            
+
+            const sectionDef = this.examData.sections[sectionName] || { marks: 0 };
+            const sectionMax = sectionDef.marks || 0; // 30, 15, 15
+
+            const rawScore = total > 0 ? Math.round((correct / total) * sectionMax * 10) / 10 : 0;
+
             this.sectionScores[sectionName] = {
                 correct: correct,
                 total: total,
                 rawScore: rawScore,
-                maxScore: 20,
-                percentage: Math.round((rawScore / 20) * 100)
+                maxScore: sectionMax,
+                percentage: sectionMax > 0 ? Math.round((rawScore / sectionMax) * 100) : 0
             };
         }
-        
-        // Calculate weighted scores
-        const aScore = this.sectionScores.objectives ? this.sectionScores.objectives.rawScore : 0;
-        const bScore = this.sectionScores.fillBlanks ? this.sectionScores.fillBlanks.rawScore : 0;
-        const cScore = this.sectionScores.theory ? this.sectionScores.theory.rawScore : 0;
-        
-        const weightedA = Math.round(aScore * 10) / 10;          // ×1, max 20
-        const weightedB = Math.round(bScore * 2 * 10) / 10;      // ×2, max 40
-        const weightedC = Math.round(cScore * 2 * 10) / 10;      // ×2, max 40
-        const weightedTotal = Math.round((weightedA + weightedB + weightedC) * 10) / 10; // max 100
-        const finalOver60 = Math.round((weightedTotal / 100) * 60 * 10) / 10; // convert to /60
-        
+
+        // Final total is the sum of scaled section raw scores (already on their section maxima)
+        const aScore = this.sectionScores.objectives ? this.sectionScores.objectives.rawScore : 0; // /30
+        const bScore = this.sectionScores.fillBlanks ? this.sectionScores.fillBlanks.rawScore : 0; // /15
+        const cScore = this.sectionScores.theory ? this.sectionScores.theory.rawScore : 0; // /15
+
+        const totalOutOf60 = Math.round((aScore + bScore + cScore) * 10) / 10; // final /60
+
         this.weightedScores = {
-            sectionA: { raw: aScore, weight: 1, weighted: weightedA, maxWeighted: 20 },
-            sectionB: { raw: bScore, weight: 2, weighted: weightedB, maxWeighted: 40 },
-            sectionC: { raw: cScore, weight: 2, weighted: weightedC, maxWeighted: 40 },
-            weightedTotal: weightedTotal,
-            maxWeightedTotal: 100,
-            finalOver60: finalOver60,
+            sectionA: { raw: aScore, weighted: aScore, maxWeighted: this.examData.sections.objectives.marks },
+            sectionB: { raw: bScore, weighted: bScore, maxWeighted: this.examData.sections.fillBlanks.marks },
+            sectionC: { raw: cScore, weighted: cScore, maxWeighted: this.examData.sections.theory.marks },
+            weightedTotal: totalOutOf60,
+            maxWeightedTotal: 60,
+            finalOver60: totalOutOf60,
             maxFinal: 60
         };
     }
@@ -503,24 +501,23 @@ class ExamApp {
     displayWeightedScoreTable() {
         const tbody = document.getElementById('weightedScoreBody');
         tbody.innerHTML = '';
-        
+
         const sections = [
             { name: 'Section A: Objectives', key: 'sectionA', raw: this.weightedScores.sectionA },
             { name: 'Section B: Fill in the Blanks', key: 'sectionB', raw: this.weightedScores.sectionB },
             { name: 'Section C: Theory', key: 'sectionC', raw: this.weightedScores.sectionC }
         ];
-        
+
         sections.forEach(section => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td style="padding: 12px; text-align: left; font-weight: 600;">${section.name}</td>
-                <td style="padding: 12px; text-align: center;">${section.raw.raw}</td>
-                <td style="padding: 12px; text-align: center;">×${section.raw.weight}</td>
+                <td style="padding: 12px; text-align: center;">${section.raw.raw} / ${section.raw.maxWeighted}</td>
                 <td style="padding: 12px; text-align: center; font-weight: bold;">${section.raw.weighted} / ${section.raw.maxWeighted}</td>
             `;
             tbody.appendChild(row);
         });
-        
+
         document.getElementById('weightedTotal').textContent = this.weightedScores.weightedTotal;
         document.getElementById('finalScoreOver60').textContent = this.weightedScores.finalOver60;
     }
@@ -569,7 +566,7 @@ class ExamApp {
                     </div>
                     <div class="stat">
                         <span class="stat-label">Raw Score:</span>
-                        <span class="stat-value">${score.rawScore}/20</span>
+                        <span class="stat-value">${score.rawScore}/${this.examData.sections[sectionName].marks}</span>
                     </div>
                     <div class="stat">
                         <span class="stat-label">Weight:</span>
@@ -645,8 +642,8 @@ class ExamApp {
                 <td>${section.name}</td>
                 <td>${score.total}</td>
                 <td>${score.correct}</td>
-                <td>${score.rawScore}</td>
-                <td>×${wsSection.weight}</td>
+                <td>${score.rawScore} / ${wsSection.maxWeighted}</td>
+                <td>Max: ${wsSection.maxWeighted}</td>
                 <td>${wsSection.weighted} / ${wsSection.maxWeighted}</td>
             `;
             tbody.appendChild(row);
@@ -678,13 +675,13 @@ class ExamApp {
         report += `Class: ${this.getGradeLabel(this.student.grade)}\n`;
         report += `Date: ${new Date().toLocaleDateString()}\n\n`;
         report += '--- SCORE BREAKDOWN ---\n\n';
-        report += 'Section                    Raw(/20)  Weight  Weighted\n';
+        report += 'Section                    Raw    Max   Weighted\n';
         report += '-----------------------------------------------------\n';
-        report += `Section A: Objectives      ${this.padNum(ws.sectionA.raw)}       ×1      ${this.padNum(ws.sectionA.weighted)}/${ws.sectionA.maxWeighted}\n`;
-        report += `Section B: Fill-in-Blanks  ${this.padNum(ws.sectionB.raw)}       ×2      ${this.padNum(ws.sectionB.weighted)}/${ws.sectionB.maxWeighted}\n`;
-        report += `Section C: Theory          ${this.padNum(ws.sectionC.raw)}       ×2      ${this.padNum(ws.sectionC.weighted)}/${ws.sectionC.maxWeighted}\n`;
+        report += `Section A: Objectives      ${this.padNum(ws.sectionA.raw)}    ${ws.sectionA.maxWeighted}    ${this.padNum(ws.sectionA.weighted)}/${ws.sectionA.maxWeighted}\n`;
+        report += `Section B: Fill-in-Blanks  ${this.padNum(ws.sectionB.raw)}    ${ws.sectionB.maxWeighted}    ${this.padNum(ws.sectionB.weighted)}/${ws.sectionB.maxWeighted}\n`;
+        report += `Section C: Theory          ${this.padNum(ws.sectionC.raw)}    ${ws.sectionC.maxWeighted}    ${this.padNum(ws.sectionC.weighted)}/${ws.sectionC.maxWeighted}\n`;
         report += '-----------------------------------------------------\n';
-        report += `Weighted Total:                            ${ws.weightedTotal}/100\n`;
+        report += `Weighted Total:                            ${ws.weightedTotal}/60\n`;
         report += `Final Score:                               ${ws.finalOver60}/60\n`;
         report += `Grade: ${grade.letter} - ${grade.remark}\n`;
         report += `Percentage: ${percentage}%\n\n`;

@@ -424,10 +424,9 @@
                         <th>S/N</th>
                         <th>Student Name</th>
                         <th>Class</th>
-                        <th>Sec A (/20)</th>
-                        <th>Sec B (/20)</th>
-                        <th>Sec C (/20)</th>
-                        <th>Weighted (/100)</th>
+                        <th>Sec A (/30)</th>
+                        <th>Sec B (/15)</th>
+                        <th>Sec C (/15)</th>
                         <th>Final (/60)</th>
                         <th>%</th>
                         <th>Grade</th>
@@ -442,7 +441,6 @@
                         <td id="avgA">-</td>
                         <td id="avgB">-</td>
                         <td id="avgC">-</td>
-                        <td id="avgWeighted">-</td>
                         <td id="avgFinal">-</td>
                         <td id="avgPercent">-</td>
                         <td colspan="2"></td>
@@ -514,9 +512,9 @@
                 results = results.filter(r => new Date(r.date).toDateString() === today);
             }
             
-            // Sort by class, then by name
+            // Sort by final score (highest → lowest), then by name
             results.sort((a, b) => {
-                if (a.grade !== b.grade) return a.grade.localeCompare(b.grade);
+                if ((b.finalOver60 || 0) !== (a.finalOver60 || 0)) return (b.finalOver60 || 0) - (a.finalOver60 || 0);
                 return a.name.localeCompare(b.name);
             });
             
@@ -557,30 +555,18 @@
                     <td>${r.sectionA_raw !== undefined ? r.sectionA_raw : '-'}</td>
                     <td>${r.sectionB_raw !== undefined ? r.sectionB_raw : '-'}</td>
                     <td>${r.sectionC_raw !== undefined ? r.sectionC_raw : '-'}</td>
-                    <td>${r.weightedTotal !== undefined ? r.weightedTotal : '-'}</td>
-                    <td><strong>${r.finalOver60 !== undefined ? r.finalOver60 : '-'}</strong></td>
-                    <td>${r.percentage !== undefined ? r.percentage + '%' : '-'}</td>
-                    <td><span class="grade-cell ${gradeClass}">${r.gradeLetter || '-'}</span></td>
-                    <td>${r.dateFormatted || new Date(r.date).toLocaleDateString()}</td>
-                `;
-                tbody.appendChild(row);
-            });
-            
-            // Show footer with averages
-            tfoot.style.display = '';
+
             const avgA = avg(results, 'sectionA_raw');
             const avgB = avg(results, 'sectionB_raw');
             const avgC = avg(results, 'sectionC_raw');
-            const avgW = avg(results, 'weightedTotal');
-            const avgF = avg(results, 'finalOver60');
+            const avgFinal = avg(results, 'finalOver60');
             const avgP = avg(results, 'percentage');
-            
+
             document.getElementById('avgA').textContent = avgA;
             document.getElementById('avgB').textContent = avgB;
             document.getElementById('avgC').textContent = avgC;
-            document.getElementById('avgWeighted').textContent = avgW;
-            document.getElementById('avgFinal').textContent = avgF;
-            document.getElementById('avgPercent').textContent = avgP + '%';
+            document.getElementById('avgFinal').textContent = avgFinal;
+            document.getElementById('avgPercent').textContent = Math.round(avgP) + '%';
             
             updateStats(results);
         }
@@ -626,31 +612,31 @@
             const className = classFilter ? gradeLabels[classFilter] : 'All_Classes';
             
             // CSV Header
-            let csv = 'S/N,Student Name,Class,Section A (/20),Section B (/20),Section C (/20),Weighted Total (/100),Final Score (/60),Percentage,Grade,Date\n';
-            
-            // CSV Data
-            results.forEach((r, index) => {
-                const name = `"${r.name}"`;
-                csv += `${index + 1},${name},${gradeLabels[r.grade] || r.grade},`;
-                csv += `${r.sectionA_raw || 0},${r.sectionB_raw || 0},${r.sectionC_raw || 0},`;
-                csv += `${r.weightedTotal || 0},${r.finalOver60 || 0},`;
-                csv += `${r.percentage || 0}%,${r.gradeLetter || '-'},`;
-                csv += `${r.dateFormatted || new Date(r.date).toLocaleDateString()}\n`;
+            let csv = 'S/N,Student Name,Class,Section A (/30),Section B (/15),Section C (/15),Final Score (/60),Percentage,Grade,Date\n';
+
+            // CSV Data (use string concatenation for compatibility)
+            results.forEach(function(r, index) {
+                const name = '"' + r.name + '"';
+                csv += (index + 1) + ',' + name + ',' + (gradeLabels[r.grade] || r.grade) + ',';
+                csv += (r.sectionA_raw || 0) + ',' + (r.sectionB_raw || 0) + ',' + (r.sectionC_raw || 0) + ',';
+                csv += (r.finalOver60 || 0) + ',';
+                csv += (r.percentage || 0) + '%,' + (r.gradeLetter || '-') + ',';
+                csv += (r.dateFormatted || new Date(r.date).toLocaleDateString()) + '\n';
             });
-            
+
             // Add averages row
             csv += '\n';
-            csv += `,CLASS AVERAGE,,`;
-            csv += `${avg(results, 'sectionA_raw')},${avg(results, 'sectionB_raw')},${avg(results, 'sectionC_raw')},`;
-            csv += `${avg(results, 'weightedTotal')},${avg(results, 'finalOver60')},`;
-            csv += `${avg(results, 'percentage')}%,,\n`;
+            csv += ',CLASS AVERAGE,,';
+            csv += avg(results, 'sectionA_raw') + ',' + avg(results, 'sectionB_raw') + ',' + avg(results, 'sectionC_raw') + ',';
+            csv += avg(results, 'finalOver60') + ',';
+            csv += Math.round(avg(results, 'percentage')) + '%,,\n';
             
             // Download
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `ICT_MidTerm_ScoreSheet_${className}_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = 'ICT_MidTerm_ScoreSheet_' + className + '_' + new Date().toISOString().split('T')[0] + '.csv';
             a.click();
             URL.revokeObjectURL(url);
         }
