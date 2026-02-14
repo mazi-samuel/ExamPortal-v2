@@ -14,9 +14,9 @@ app.use(cors());
 app.use(express.json());
 
 // ---------- Landing page redirect ----------
-// Serve portal-index.html as the default landing page
+// Serve login.html as the default landing page (send users straight to login)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'portal-index.html'));
+  res.sendFile(path.join(__dirname, 'login.html'));
 });
 
 // ---------- Serve static files ----------
@@ -50,6 +50,7 @@ app.delete('/api/results', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\n  ExamPortal running at http://localhost:${PORT}\n`);
+  console.log(`  Login:        http://localhost:${PORT}/login.html`);
   console.log(`  Portal:       http://localhost:${PORT}/`);
   console.log(`  Legacy Exam:  http://localhost:${PORT}/index-exam.html`);
   console.log(`  Teacher CMS:  http://localhost:${PORT}/teacher-dashboard.html`);

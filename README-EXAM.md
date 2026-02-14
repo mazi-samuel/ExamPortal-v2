@@ -35,7 +35,7 @@ This is a comprehensive ICT examination system for Primary School Grades 1-5. St
 
 ## 🚀 How to Use
 
-Note: The application root (`/`) now serves the public portal landing — open `http://localhost:5510/` to reach the portal (the Login page is at `/login.html`).
+Note: The application root (`/`) redirects to the Login page — open http://localhost:5510/ to reach the Login page (`/login.html`).
 
 ### Option 1: Use New Exam System
 1. Open `index-exam.html` in your web browser

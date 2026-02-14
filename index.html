@@ -1,128 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ExamPortal - Smart Online Examination Platform</title>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/portal.css">
-</head>
-<body>
-    <!-- Nav -->
-    <nav class="portal-nav" id="portal-nav">
-        <div class="nav-inner">
-            <a href="/" class="nav-brand"><i class="fas fa-graduation-cap"></i> ExamPortal</a>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#how">How It Works</a>
-            </div>
-            <div class="nav-user">
-                <a href="/login.html" class="btn btn-sm btn-outline" style="color:#fff;border-color:rgba(255,255,255,.5)">
-                    <i class="fas fa-sign-in-alt"></i> Login
-                </a>
-                <a href="/signup.html" class="btn btn-sm btn-success">
-                    <i class="fas fa-user-plus"></i> Sign Up
-                </a>
-            </div>
-            <button class="nav-toggle" onclick="this.closest('.portal-nav').classList.toggle('nav-open')"><i class="fas fa-bars"></i></button>
-        </div>
-    </nav>
-
-    <div class="page-wrap">
-        <!-- Hero -->
-        <section class="hero">
-            <span class="hero-emoji">🎓📝✨</span>
-            <h1>Smart Online Examination Portal</h1>
-            <p>A fun, easy, and secure platform for schools to create exams, let students take tests, and track results — all in one place!</p>
-            <div class="btn-group justify-center mt-3">
-                <a href="/signup.html?role=student" class="btn btn-primary btn-lg">
-                    <i class="fas fa-child"></i> I'm a Student
-                </a>
-                <a href="/signup.html?role=teacher" class="btn btn-success btn-lg">
-                    <i class="fas fa-chalkboard-teacher"></i> I'm a Teacher
-                </a>
-            </div>
-        </section>
-
-        <!-- Features -->
-        <section id="features" class="mt-4">
-            <div class="features-grid">
-                <div class="feature-card">
-                    <i class="fas fa-school"></i>
-                    <h3>Multi-School</h3>
-                    <p>Each school gets their own space with classes, subjects, teachers & students.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-edit"></i>
-                    <h3>Easy Exam Builder</h3>
-                    <p>Teachers create exams with MCQ, fill-in-the-blank & theory questions. Upload from Word or PDF!</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-clock"></i>
-                    <h3>Timed Exams</h3>
-                    <p>Set date, time & duration. Auto-submit when time is up. No cheating!</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-chart-line"></i>
-                    <h3>Instant Results</h3>
-                    <p>Students get graded instantly. Teachers see live score sheets & reports.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-file-signature"></i>
-                    <h3>Digital Signatures</h3>
-                    <p>Teachers upload signatures that appear on official student report cards.</p>
-                </div>
-                <div class="feature-card">
-                    <i class="fas fa-download"></i>
-                    <h3>Export & Print</h3>
-                    <p>Download score sheets as CSV, print beautiful report cards with one click.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- How it works -->
-        <section id="how" class="mt-4">
-            <div class="container container-md text-center">
-                <h2>How It Works</h2>
-                <div class="grid grid-3 mt-3">
-                    <div class="card text-center">
-                        <span class="card-icon">1️⃣</span>
-                        <h3>Sign Up</h3>
-                        <p>Create an account as a teacher or student and join your school.</p>
-                    </div>
-                    <div class="card text-center">
-                        <span class="card-icon">2️⃣</span>
-                        <h3>Take or Create Exams</h3>
-                        <p>Teachers build exams. Students see published exams for their class.</p>
-                    </div>
-                    <div class="card text-center">
-                        <span class="card-icon">3️⃣</span>
-                        <h3>Get Results</h3>
-                        <p>Auto-grading delivers instant scores, grades, and detailed reports.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Footer -->
-        <footer class="text-center mt-4" style="color:rgba(255,255,255,.7);padding:30px;">
-            <p>&copy; 2025-2026 ExamPortal. Built for schools everywhere.</p>
-        </footer>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="js/supabase-config.js"></script>
-    <script>
-        // If already logged in, redirect to dashboard
-        (async function() {
-            const profile = await getCurrentProfile();
-            if (profile) {
-                window.location.href = profile.role === 'teacher'
-                    ? '/teacher-dashboard.html'
-                    : '/student-dashboard.html';
-            }
-        })();
-    </script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0; url=/login.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Redirecting…</title>
+  </head>
+  <body>
+    <p>Redirecting to <a href="/login.html">login page</a>…</p>
+    <script>location.replace('/login.html');</script>
+  </body>
 </html>
