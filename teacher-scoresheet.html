@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Sheet - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader"><div class="loader"></div><p>Loading scores...</p></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var allSubmissions = [];
+        var allExams = [];
+
+        async function init() {
+            profile = await requireAuth(['teacher']);
+            if (!profile) return;
+            renderNav(profile);
+            await loadData();
+            renderPage();
+        }
+
+        async function loadData() {
+            // Load all submissions for this school
+            var { data: subs } = await db
+                .from('exam_submissions')
+                .select('*, profiles!exam_submissions_student_id_fkey(full_name, class, class_section, school_id), exams(title, class, total_marks, subjects(name))')
+                .order('submitted_at', { ascending: false });
+
+            // Filter to same school
+            allSubmissions = (subs || []).filter(function(s) {
+                return s.profiles && s.profiles.school_id === profile.school_id && s.submitted_at;
+            });
+
+            // Apply teacher_status filtering
+            if (profile.teacher_status === 'subject_teacher' && profile.subject_taught) {
+                // Subject teacher sees only their subject's submissions
+                allSubmissions = allSubmissions.filter(function(s) {
+                    return s.exams && s.exams.subjects && s.exams.subjects.name.toLowerCase() === profile.subject_taught.toLowerCase();
+                });
+            } else if (profile.teacher_status === 'class_teacher' && profile.assigned_class) {
+                // Class teacher sees submissions for their assigned class (all sections of that grade)
+                allSubmissions = allSubmissions.filter(function(s) {
+                    return s.exams && s.exams.class === profile.assigned_class;
+                });
+            }
+            // Head teacher: no filter — sees everything
+
+            var exQuery = db.from('exams').select('id, title, class, subjects(name)').eq('school_id', profile.school_id);
+            if (profile.teacher_status === 'subject_teacher' && profile.subject_taught) {
+                // Only exams for their subject
+                var { data: subjectRows } = await db.from('subjects').select('id').eq('school_id', profile.school_id).ilike('name', profile.subject_taught);
+                var subjectIds = (subjectRows || []).map(function(s) { return s.id; });
+                if (subjectIds.length > 0) exQuery = exQuery.in('subject_id', subjectIds);
+                else exQuery = exQuery.eq('subject_id', '00000000-0000-0000-0000-000000000000');
+            } else if (profile.teacher_status === 'class_teacher' && profile.assigned_class) {
+                exQuery = exQuery.eq('class', profile.assigned_class);
+            }
+            var { data: exs } = await exQuery;
+            allExams = exs || [];
+        }
+
+        function getFiltered() {
+            var classF = document.getElementById('filterClass') ? document.getElementById('filterClass').value : '';
+            var examF = document.getElementById('filterExam') ? document.getElementById('filterExam').value : '';
+            var dateF = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
+
+            var filtered = allSubmissions.slice();
+
+            if (classF) filtered = filtered.filter(function(s) { return s.profiles.class === classF; });
+            if (examF) filtered = filtered.filter(function(s) { return s.exam_id === examF; });
+            if (dateF === 'today') {
+                var today = new Date().toDateString();
+                filtered = filtered.filter(function(s) { return new Date(s.submitted_at).toDateString() === today; });
+            } else if (dateF) {
+                filtered = filtered.filter(function(s) { return new Date(s.submitted_at).toDateString() === dateF; });
+            }
+
+            // Sort by percentage descending
+            filtered.sort(function(a, b) { return (b.percentage || 0) - (a.percentage || 0); });
+            return filtered;
+        }
+
+        function renderPage() {
+            var html = '';
+
+            // Header
+            var scopeLabel = 'All Submissions';
+            if (profile.teacher_status === 'subject_teacher' && profile.subject_taught) scopeLabel = profile.subject_taught + ' Submissions';
+            else if (profile.teacher_status === 'class_teacher' && profile.assigned_class) scopeLabel = getClassWithSection(profile.assigned_class, profile.assigned_class_section) + ' Submissions';
+            else if (profile.teacher_status === 'head_teacher') scopeLabel = 'All Submissions (School-wide)';
+
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-chart-bar"></i> Score Sheet</h1>';
+            html += '<p class="subtitle">' + (profile.schools ? profile.schools.name : '') + ' &bull; ' + scopeLabel + '</p></div>';
+            html += '<a href="/teacher-dashboard.html" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Dashboard</a>';
+            html += '</div>';
+
+            // Filters
+            html += '<div class="card mb-3 no-print" style="padding:16px">';
+            html += '<div class="d-flex flex-wrap gap-2 align-center">';
+
+            html += '<label style="font-weight:700;color:#4a47a3"><i class="fas fa-filter"></i> Filters:</label>';
+
+            html += '<select class="form-control" id="filterClass" style="width:auto" onchange="renderTable()">';
+            html += '<option value="">All Classes</option>';
+            CLASS_OPTIONS.forEach(function(c) { html += '<option value="' + c.value + '">' + c.label + '</option>'; });
+            html += '</select>';
+
+            html += '<select class="form-control" id="filterExam" style="width:auto" onchange="renderTable()">';
+            html += '<option value="">All Exams</option>';
+            allExams.forEach(function(e) {
+                var label = e.title + ' (' + (e.subjects ? e.subjects.name : '') + ')';
+                html += '<option value="' + e.id + '">' + label + '</option>';
+            });
+            html += '</select>';
+
+            html += '<select class="form-control" id="filterDate" style="width:auto" onchange="renderTable()">';
+            html += '<option value="">All Dates</option>';
+            html += '<option value="today">Today</option>';
+            // Unique dates
+            var dates = [];
+            allSubmissions.forEach(function(s) {
+                var d = new Date(s.submitted_at).toDateString();
+                if (dates.indexOf(d) === -1) dates.push(d);
+            });
+            dates.forEach(function(d) {
+                html += '<option value="' + d + '">' + new Date(d).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) + '</option>';
+            });
+            html += '</select>';
+
+            html += '<button class="btn btn-sm btn-success" onclick="downloadCSV()"><i class="fas fa-download"></i> CSV</button>';
+            html += '<button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>';
+
+            html += '</div></div>';
+
+            // Stats
+            html += '<div class="stats-grid" id="statsArea"></div>';
+
+            // Table
+            html += '<div class="table-wrap" id="tableArea"></div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+            renderTable();
+        }
+
+        function renderTable() {
+            var filtered = getFiltered();
+
+            // Stats
+            var statsHtml = '';
+            statsHtml += '<div class="stat-card"><span class="stat-number">' + filtered.length + '</span><span class="stat-label">Submissions</span></div>';
+            if (filtered.length > 0) {
+                var scores = filtered.map(function(s) { return s.total_score || 0; });
+                var pcts = filtered.map(function(s) { return s.percentage || 0; });
+                var avg = Math.round(scores.reduce(function(a,b){return a+b;},0) / scores.length * 10) / 10;
+                var highest = Math.max.apply(null, scores);
+                var lowest = Math.min.apply(null, scores);
+                var passRate = Math.round(pcts.filter(function(p){return p >= 50;}).length / pcts.length * 100);
+                statsHtml += '<div class="stat-card"><span class="stat-number">' + avg + '</span><span class="stat-label">Average Score</span></div>';
+                statsHtml += '<div class="stat-card"><span class="stat-number">' + highest + '</span><span class="stat-label">Highest</span></div>';
+                statsHtml += '<div class="stat-card"><span class="stat-number">' + lowest + '</span><span class="stat-label">Lowest</span></div>';
+                statsHtml += '<div class="stat-card"><span class="stat-number">' + passRate + '%</span><span class="stat-label">Pass Rate (≥50%)</span></div>';
+            }
+            document.getElementById('statsArea').innerHTML = statsHtml;
+
+            // Table
+            if (filtered.length === 0) {
+                document.getElementById('tableArea').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No submissions found</h3><p>Adjust filters or wait for students to take exams.</p></div>';
+                return;
+            }
+
+            var tHtml = '<table><thead><tr>';
+            tHtml += '<th>S/N</th><th>Student</th><th>Class</th><th>Exam</th><th>Subject</th>';
+            tHtml += '<th>Score</th><th>%</th><th>Grade</th><th>Date</th><th>Actions</th>';
+            tHtml += '</tr></thead><tbody>';
+
+            filtered.forEach(function(s, i) {
+                var studentName = s.profiles ? s.profiles.full_name : '-';
+                var studentClass = s.profiles ? getClassWithSection(s.profiles.class, s.profiles.class_section) : '-';
+                var examTitle = s.exams ? s.exams.title : '-';
+                var subjectName = (s.exams && s.exams.subjects) ? s.exams.subjects.name : '-';
+                var gc = getGradeClass(s.grade_letter);
+
+                tHtml += '<tr>';
+                tHtml += '<td>' + (i + 1) + '</td>';
+                tHtml += '<td>' + studentName + '</td>';
+                tHtml += '<td>' + studentClass + '</td>';
+                tHtml += '<td>' + examTitle + '</td>';
+                tHtml += '<td>' + subjectName + '</td>';
+                tHtml += '<td><strong>' + (s.total_score || 0) + '/' + (s.max_score || 0) + '</strong></td>';
+                tHtml += '<td>' + Math.round(s.percentage || 0) + '%</td>';
+                tHtml += '<td><span class="grade-badge ' + gc + '">' + (s.grade_letter || '-') + '</span></td>';
+                tHtml += '<td>' + formatDate(s.submitted_at) + '</td>';
+                tHtml += '<td><a href="/student-report.html?submission=' + s.id + '" class="btn btn-sm btn-info" title="Report"><i class="fas fa-file-alt"></i></a></td>';
+                tHtml += '</tr>';
+            });
+
+            tHtml += '</tbody></table>';
+            document.getElementById('tableArea').innerHTML = tHtml;
+        }
+
+        function downloadCSV() {
+            var filtered = getFiltered();
+            if (!filtered.length) { showToast('No data to export', 'warning'); return; }
+
+            var csv = 'S/N,Student,Class,Exam,Subject,Score,Max,Percentage,Grade,Date,Auto-Submitted\n';
+            filtered.forEach(function(s, i) {
+                csv += (i + 1) + ',';
+                csv += '"' + (s.profiles ? s.profiles.full_name : '') + '",';
+                csv += (s.profiles ? getClassLabel(s.profiles.class) : '') + ',';
+                csv += '"' + (s.exams ? s.exams.title : '') + '",';
+                csv += '"' + ((s.exams && s.exams.subjects) ? s.exams.subjects.name : '') + '",';
+                csv += (s.total_score || 0) + ',' + (s.max_score || 0) + ',';
+                csv += Math.round(s.percentage || 0) + '%,';
+                csv += (s.grade_letter || '-') + ',';
+                csv += formatDate(s.submitted_at) + ',';
+                csv += (s.is_auto_submitted ? 'Yes' : 'No') + '\n';
+            });
+
+            var blob = new Blob([csv], { type: 'text/csv' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'ScoreSheet_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav">
+        <div class="nav-inner">
+            <a href="/portal-index.html" class="nav-brand"><i class="fas fa-graduation-cap"></i> ExamPortal</a>
+            <div class="nav-user">
+                <a href="/login.html" class="btn btn-sm btn-outline" style="color:#fff;border-color:rgba(255,255,255,.5)">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="page-wrap d-flex justify-center" style="padding-top:30px">
+        <div class="container container-sm">
+            <h1 class="text-center"><i class="fas fa-user-plus"></i> Create Account</h1>
+            <p class="subtitle text-center mb-3">Join ExamPortal to start learning!</p>
+
+            <!-- Role selection -->
+            <div class="tabs justify-center mb-3" style="border:none;">
+                <button class="tab-btn active" id="tabStudent" onclick="setRole('student')">
+                    <i class="fas fa-child"></i> Student
+                </button>
+                <button class="tab-btn" id="tabTeacher" onclick="setRole('teacher')">
+                    <i class="fas fa-chalkboard-teacher"></i> Teacher
+                </button>
+            </div>
+
+            <form id="signupForm" onsubmit="handleSignup(event)">
+                <!-- Common: Full Name -->
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Full Name *</label>
+                    <input type="text" id="fullName" class="form-control" placeholder="e.g. John Peter" required>
+                </div>
+
+                <!-- Student: username -->
+                <div class="form-group" id="usernameGroup">
+                    <label><i class="fas fa-at"></i> Username *</label>
+                    <input type="text" id="username" class="form-control" placeholder="e.g. john.peter">
+                    <span class="form-hint">This is what you'll use to log in. Must be unique.</span>
+                </div>
+
+                <!-- Teacher: email -->
+                <div class="form-group" id="emailGroupTeacher" style="display:none">
+                    <label><i class="fas fa-envelope"></i> Email Address *</label>
+                    <input type="email" id="emailTeacher" class="form-control" placeholder="teacher@school.com">
+                </div>
+
+                <!-- Student: also collect a backup email (optional) -->
+                <div class="form-group" id="emailGroupStudent">
+                    <label><i class="fas fa-envelope"></i> Parent's Email (optional)</label>
+                    <input type="email" id="emailStudent" class="form-control" placeholder="parent@email.com">
+                    <span class="form-hint">For password recovery. You'll log in with your username.</span>
+                </div>
+
+                <!-- Password -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-key"></i> Password *</label>
+                        <input type="password" id="password" class="form-control" placeholder="Min 6 characters" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-key"></i> Confirm Password *</label>
+                        <input type="password" id="confirmPassword" class="form-control" placeholder="Re-enter password" required>
+                    </div>
+                </div>
+
+                <!-- School -->
+                <div class="form-group">
+                    <label><i class="fas fa-school"></i> School *</label>
+                    <select id="schoolSelect" class="form-control" onchange="toggleNewSchool()">
+                        <option value="">-- Select School --</option>
+                        <option value="__new__">+ Add New School</option>
+                    </select>
+                </div>
+                <div class="form-group hidden" id="newSchoolGroup">
+                    <label>New School Name</label>
+                    <input type="text" id="newSchoolName" class="form-control" placeholder="Enter school name">
+                </div>
+
+                <!-- Student-only fields -->
+                <div id="studentFields">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-chalkboard"></i> Class *</label>
+                            <select id="classSelect" class="form-control">
+                                <option value="">-- Select Class --</option>
+                                <option value="grade1">Grade 1 (Basic 1)</option>
+                                <option value="grade2">Grade 2 (Basic 2)</option>
+                                <option value="grade3">Grade 3 (Basic 3)</option>
+                                <option value="grade4">Grade 4 (Basic 4)</option>
+                                <option value="grade5">Grade 5 (Basic 5)</option>
+                                <option value="grade6">Grade 6 (Basic 6)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-font"></i> Class Section</label>
+                            <select id="classSectionStudent" class="form-control" onchange="toggleCustomSection('student')">
+                                <option value="">None (single stream)</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
+                                <option value="__custom__">Other (type below)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group hidden" id="customSectionStudentGroup">
+                        <label>Custom Section Name</label>
+                        <input type="text" id="customSectionStudent" class="form-control" placeholder="e.g. E, Gold, etc.">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar"></i> Date of Birth</label>
+                            <input type="date" id="dob" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-venus-mars"></i> Gender</label>
+                            <select id="gender" class="form-control">
+                                <option value="">-- Select --</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-user-friends"></i> Parent/Guardian Name</label>
+                            <input type="text" id="parentName" class="form-control" placeholder="Parent's full name">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-phone"></i> Parent's Phone</label>
+                            <input type="tel" id="parentPhone" class="form-control" placeholder="08012345678">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Teacher-only fields -->
+                <div id="teacherFields" style="display:none">
+                    <div class="form-group">
+                        <label><i class="fas fa-id-badge"></i> Teacher Status *</label>
+                        <select id="teacherStatus" class="form-control" onchange="onTeacherStatusChange()">
+                            <option value="">-- Select --</option>
+                            <option value="subject_teacher">Subject Teacher</option>
+                            <option value="class_teacher">Class Teacher</option>
+                            <option value="head_teacher">Head Teacher</option>
+                        </select>
+                        <span class="form-hint" id="teacherStatusHint"></span>
+                    </div>
+                    <!-- Subject teacher: choose subject -->
+                    <div class="form-group hidden" id="subjectTaughtGroup">
+                        <label><i class="fas fa-book"></i> Subject You Teach *</label>
+                        <input type="text" id="subjectTaught" class="form-control" placeholder="e.g. ICT, Mathematics, English">
+                    </div>
+                    <!-- Class teacher: choose class + section -->
+                    <div id="classTeacherFields" class="hidden">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fas fa-chalkboard"></i> Your Class *</label>
+                                <select id="assignedClass" class="form-control">
+                                    <option value="">-- Select --</option>
+                                    <option value="grade1">Grade 1 (Basic 1)</option>
+                                    <option value="grade2">Grade 2 (Basic 2)</option>
+                                    <option value="grade3">Grade 3 (Basic 3)</option>
+                                    <option value="grade4">Grade 4 (Basic 4)</option>
+                                    <option value="grade5">Grade 5 (Basic 5)</option>
+                                    <option value="grade6">Grade 6 (Basic 6)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fas fa-font"></i> Class Section</label>
+                                <select id="assignedClassSection" class="form-control" onchange="toggleCustomSection('teacher')">
+                                    <option value="">None (single stream)</option>
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                    <option value="__custom__">Other (type below)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group hidden" id="customSectionTeacherGroup">
+                            <label>Custom Section Name</label>
+                            <input type="text" id="customSectionTeacher" class="form-control" placeholder="e.g. E, Gold, etc.">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-block btn-lg mt-2" id="signupBtn">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
+            </form>
+
+            <p class="mt-3 text-center" style="color:#666">
+                Already have an account? <a href="/login.html" style="color:#667eea;font-weight:700">Login</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        let currentRole = 'student';
+
+        function setRole(role) {
+            currentRole = role;
+            document.getElementById('tabStudent').classList.toggle('active', role === 'student');
+            document.getElementById('tabTeacher').classList.toggle('active', role === 'teacher');
+            document.getElementById('usernameGroup').style.display = role === 'student' ? '' : 'none';
+            document.getElementById('emailGroupTeacher').style.display = role === 'teacher' ? '' : 'none';
+            document.getElementById('emailGroupStudent').style.display = role === 'student' ? '' : 'none';
+            document.getElementById('studentFields').style.display = role === 'student' ? '' : 'none';
+            document.getElementById('teacherFields').style.display = role === 'teacher' ? '' : 'none';
+        }
+
+        function onTeacherStatusChange() {
+            var status = document.getElementById('teacherStatus').value;
+            var hint = document.getElementById('teacherStatusHint');
+            document.getElementById('subjectTaughtGroup').classList.toggle('hidden', status !== 'subject_teacher');
+            document.getElementById('classTeacherFields').classList.toggle('hidden', status !== 'class_teacher');
+            if (status === 'subject_teacher') {
+                hint.textContent = 'You can only create exams for your subject and view its scores.';
+            } else if (status === 'class_teacher') {
+                hint.textContent = 'You can create exams for any subject without a teacher and view all scores for your class.';
+            } else if (status === 'head_teacher') {
+                hint.textContent = 'You can view all scores across all classes and subjects.';
+            } else {
+                hint.textContent = '';
+            }
+        }
+
+        function toggleCustomSection(who) {
+            if (who === 'student') {
+                var val = document.getElementById('classSectionStudent').value;
+                document.getElementById('customSectionStudentGroup').classList.toggle('hidden', val !== '__custom__');
+            } else {
+                var val = document.getElementById('assignedClassSection').value;
+                document.getElementById('customSectionTeacherGroup').classList.toggle('hidden', val !== '__custom__');
+            }
+        }
+
+        function getSection(selectId, customId) {
+            var val = document.getElementById(selectId).value;
+            if (val === '__custom__') return document.getElementById(customId).value.trim().toUpperCase() || null;
+            return val || null;
+        }
+
+        function toggleNewSchool() {
+            var sel = document.getElementById('schoolSelect').value;
+            document.getElementById('newSchoolGroup').classList.toggle('hidden', sel !== '__new__');
+        }
+
+        async function loadSchoolsList() {
+            var schools = await loadSchools();
+            var sel = document.getElementById('schoolSelect');
+            schools.forEach(function(s) {
+                var opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                sel.insertBefore(opt, sel.lastElementChild); // before "+ Add New"
+            });
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            var btn = document.getElementById('signupBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:3px"></span> Creating account...';
+
+            try {
+                var fullName = document.getElementById('fullName').value.trim();
+                if (!fullName) throw new Error('Please enter your full name');
+
+                var password = document.getElementById('password').value;
+                var confirm = document.getElementById('confirmPassword').value;
+                if (password.length < 6) throw new Error('Password must be at least 6 characters');
+                if (password !== confirm) throw new Error('Passwords do not match');
+
+                // School
+                var schoolId = document.getElementById('schoolSelect').value;
+                if (schoolId === '__new__') {
+                    var newName = document.getElementById('newSchoolName').value.trim();
+                    if (!newName) throw new Error('Please enter the school name');
+                    // Use RPC function to safely create school (works before auth)
+                    var { data: rpcId, error: sErr } = await db.rpc('create_school_if_not_exists', { school_name: newName });
+                    if (sErr) throw sErr;
+                    schoolId = rpcId;
+                }
+                if (!schoolId) throw new Error('Please select a school');
+
+                // Email
+                var email;
+                var username = null;
+                if (currentRole === 'student') {
+                    username = document.getElementById('username').value.trim();
+                    if (!username) throw new Error('Please enter a username');
+                    if (username.length < 3) throw new Error('Username must be at least 3 characters');
+                    email = usernameToEmail(username);
+                } else {
+                    email = document.getElementById('emailTeacher').value.trim();
+                    if (!email) throw new Error('Please enter your email');
+                }
+
+                // Metadata
+                var meta = {
+                    full_name: fullName,
+                    username: username,
+                    role: currentRole,
+                    school_id: schoolId
+                };
+
+                if (currentRole === 'student') {
+                    meta.class = document.getElementById('classSelect').value;
+                    meta.class_section = getSection('classSectionStudent', 'customSectionStudent');
+                    meta.date_of_birth = document.getElementById('dob').value || null;
+                    meta.gender = document.getElementById('gender').value || null;
+                    meta.parent_name = document.getElementById('parentName').value.trim() || null;
+                    meta.parent_phone = document.getElementById('parentPhone').value.trim() || null;
+                    if (!meta.class) throw new Error('Please select your class');
+                }
+
+                if (currentRole === 'teacher') {
+                    var teacherStatus = document.getElementById('teacherStatus').value;
+                    if (!teacherStatus) throw new Error('Please select your teacher status');
+                    meta.teacher_status = teacherStatus;
+
+                    if (teacherStatus === 'subject_teacher') {
+                        var subjectTaught = document.getElementById('subjectTaught').value.trim();
+                        if (!subjectTaught) throw new Error('Please enter the subject you teach');
+                        meta.subject_taught = subjectTaught;
+                    }
+
+                    if (teacherStatus === 'class_teacher') {
+                        var assignedClass = document.getElementById('assignedClass').value;
+                        if (!assignedClass) throw new Error('Please select your assigned class');
+                        meta.assigned_class = assignedClass;
+                        meta.assigned_class_section = getSection('assignedClassSection', 'customSectionTeacher');
+                    }
+                }
+
+                // Sign up
+                var { data, error } = await db.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: { data: meta }
+                });
+                if (error) throw error;
+
+                showToast('Account created successfully!', 'success');
+
+                setTimeout(function() {
+                    if (currentRole === 'teacher') {
+                        window.location.href = '/teacher-dashboard.html';
+                    } else {
+                        window.location.href = '/student-dashboard.html';
+                    }
+                }, 800);
+
+            } catch (err) {
+                showToast(err.message || 'Sign up failed', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> Create Account';
+            }
+        }
+
+        // Init
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('role') === 'teacher') setRole('teacher');
+        loadSchoolsList();
+    </script>
+</body>
+</html>

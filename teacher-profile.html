@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Profile - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-sm" id="mainContent">
+            <div class="page-loader"><div class="loader"></div><p>Loading profile...</p></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var signatureUrl = null;
+
+        async function init() {
+            profile = await requireAuth(['teacher']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Load existing signature
+            var { data: sig } = await db.from('teacher_signatures').select('signature_url').eq('teacher_id', profile.id).maybeSingle();
+            if (sig) signatureUrl = sig.signature_url;
+
+            renderProfile();
+        }
+
+        function renderProfile() {
+            var html = '';
+
+            html += '<h1 class="text-center"><i class="fas fa-user-cog"></i> My Profile</h1>';
+            html += '<p class="subtitle text-center mb-3">Manage your account & signature</p>';
+
+            // Profile info
+            html += '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-id-card"></i> Profile Information</h3>';
+            html += '<table class="report-table mt-2">';
+            html += '<tr><th>Name</th><td>' + profile.full_name + '</td></tr>';
+            html += '<tr><th>Email</th><td>' + (profile.email || '-') + '</td></tr>';
+            html += '<tr><th>Role</th><td><span class="badge badge-info">Teacher</span></td></tr>';
+            html += '<tr><th>School</th><td>' + (profile.schools ? profile.schools.name : '-') + '</td></tr>';
+            html += '<tr><th>Joined</th><td>' + formatDate(profile.created_at) + '</td></tr>';
+            html += '</table>';
+            html += '</div>';
+
+            // Update name
+            html += '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-edit"></i> Update Name</h3>';
+            html += '<div class="form-group mt-2">';
+            html += '<input type="text" class="form-control" id="newName" value="' + escapeAttr(profile.full_name) + '">';
+            html += '</div>';
+            html += '<button class="btn btn-primary btn-sm" onclick="updateName()"><i class="fas fa-save"></i> Update</button>';
+            html += '</div>';
+
+            // Signature upload
+            html += '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-signature"></i> Digital Signature</h3>';
+            html += '<p class="text-muted" style="font-size:.9rem">Upload your signature image (PNG with transparent background recommended). This will appear on student report cards.</p>';
+
+            html += '<div class="d-flex align-center gap-3 mt-2 flex-wrap">';
+            html += '<div class="signature-preview" id="sigPreview">';
+            if (signatureUrl) {
+                html += '<img src="' + signatureUrl + '" alt="Signature">';
+            } else {
+                html += '<span style="color:#ccc"><i class="fas fa-signature" style="font-size:2rem"></i></span>';
+            }
+            html += '</div>';
+
+            html += '<div>';
+            html += '<input type="file" id="sigFile" accept="image/*" style="display:none" onchange="previewSignature(this)">';
+            html += '<button class="btn btn-success btn-sm" onclick="document.getElementById(\'sigFile\').click()"><i class="fas fa-upload"></i> Choose Image</button>';
+            if (signatureUrl) {
+                html += ' <button class="btn btn-danger btn-sm" onclick="removeSignature()"><i class="fas fa-trash"></i> Remove</button>';
+            }
+            html += '<p class="form-hint mt-1">Max 2MB. PNG, JPG, or WEBP.</p>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<button class="btn btn-primary mt-2 hidden" id="saveSignatureBtn" onclick="uploadSignature()"><i class="fas fa-save"></i> Save Signature</button>';
+            html += '</div>';
+
+            // Change password
+            html += '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-key"></i> Change Password</h3>';
+            html += '<div class="form-group mt-2">';
+            html += '<label>New Password</label>';
+            html += '<input type="password" class="form-control" id="newPassword" placeholder="Min 6 characters">';
+            html += '</div>';
+            html += '<div class="form-group">';
+            html += '<label>Confirm New Password</label>';
+            html += '<input type="password" class="form-control" id="confirmNewPassword" placeholder="Re-enter">';
+            html += '</div>';
+            html += '<button class="btn btn-warning btn-sm" onclick="changePassword()"><i class="fas fa-key"></i> Change Password</button>';
+            html += '</div>';
+
+            html += '<div class="text-center mt-3">';
+            html += '<a href="/teacher-dashboard.html" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>';
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        async function updateName() {
+            var newName = document.getElementById('newName').value.trim();
+            if (!newName) { showToast('Name cannot be empty', 'error'); return; }
+            var { error } = await db.from('profiles').update({ full_name: newName }).eq('id', profile.id);
+            if (error) { showToast(error.message, 'error'); return; }
+            profile.full_name = newName;
+            showToast('Name updated!', 'success');
+        }
+
+        function previewSignature(input) {
+            if (!input.files || !input.files[0]) return;
+            var file = input.files[0];
+            if (file.size > 2 * 1024 * 1024) { showToast('File too large (max 2MB)', 'error'); return; }
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('sigPreview').innerHTML = '<img src="' + e.target.result + '" alt="Signature">';
+                document.getElementById('saveSignatureBtn').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function uploadSignature() {
+            var fileInput = document.getElementById('sigFile');
+            if (!fileInput.files || !fileInput.files[0]) { showToast('No file selected', 'error'); return; }
+            var file = fileInput.files[0];
+
+            var btn = document.getElementById('saveSignatureBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader" style="width:16px;height:16px;border-width:2px"></span> Uploading...';
+
+            try {
+                var ext = file.name.split('.').pop();
+                var path = profile.id + '/signature.' + ext;
+
+                // Upload to storage
+                var { data, error } = await db.storage.from('signatures').upload(path, file, { upsert: true });
+                if (error) throw error;
+
+                // Get public URL
+                var { data: urlData } = db.storage.from('signatures').getPublicUrl(path);
+                var url = urlData.publicUrl;
+
+                // Upsert signature record
+                var { error: dbErr } = await db.from('teacher_signatures').upsert({
+                    teacher_id: profile.id,
+                    signature_url: url,
+                    uploaded_at: new Date().toISOString()
+                }, { onConflict: 'teacher_id' });
+                if (dbErr) throw dbErr;
+
+                signatureUrl = url;
+                showToast('Signature uploaded!', 'success');
+                renderProfile();
+            } catch (err) {
+                showToast('Upload failed: ' + err.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Signature';
+            }
+        }
+
+        async function removeSignature() {
+            if (!confirm('Remove your digital signature?')) return;
+            await db.from('teacher_signatures').delete().eq('teacher_id', profile.id);
+            signatureUrl = null;
+            showToast('Signature removed', 'success');
+            renderProfile();
+        }
+
+        async function changePassword() {
+            var pw = document.getElementById('newPassword').value;
+            var pw2 = document.getElementById('confirmNewPassword').value;
+            if (pw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+            if (pw !== pw2) { showToast('Passwords do not match', 'error'); return; }
+
+            var { error } = await db.auth.updateUser({ password: pw });
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Password changed!', 'success');
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmNewPassword').value = '';
+        }
+
+        function escapeAttr(s) { return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Builder - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <!-- Mammoth.js for Word doc parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+    <!-- PDF.js for PDF parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading exam builder...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var editingExamId = null;
+        var subjects = [];
+
+        // Exam data model
+        var examData = {
+            title: '',
+            description: '',
+            subject_id: '',
+            class: '',
+            exam_date: '',
+            exam_time: '',
+            duration_minutes: 30,
+            total_marks: 60,
+            sections: []
+            // Each section: { id, section_name, section_type, max_marks, instructions, sort_order, questions: [...] }
+            // Each question: { id, question_text, question_type, options, correct_answer, marks, sort_order }
+        };
+
+        async function init() {
+            profile = await requireAuth(['teacher']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Load subjects — filtered by teacher_status
+            var subQuery = db.from('subjects').select('*').eq('school_id', profile.school_id);
+            if (profile.teacher_status === 'subject_teacher' && profile.subject_taught) {
+                subQuery = subQuery.ilike('name', profile.subject_taught);
+            }
+            if (profile.teacher_status === 'class_teacher' && profile.assigned_class) {
+                subQuery = subQuery.eq('class', profile.assigned_class);
+            }
+            // Head teacher: no filter
+            var { data } = await subQuery.order('name');
+            subjects = data || [];
+
+            // Check if editing existing exam
+            var params = new URLSearchParams(window.location.search);
+            editingExamId = params.get('edit');
+            var preSubject = params.get('subject');
+
+            if (editingExamId) {
+                await loadExistingExam(editingExamId);
+            } else if (preSubject) {
+                var sub = subjects.find(function(s) { return s.id === preSubject; });
+                if (sub) {
+                    examData.subject_id = sub.id;
+                    examData.class = sub.class;
+                }
+            }
+
+            renderBuilder();
+        }
+
+        async function loadExistingExam(examId) {
+            var { data: exam } = await db.from('exams').select('*').eq('id', examId).single();
+            if (!exam) { showToast('Exam not found', 'error'); return; }
+
+            examData.title = exam.title;
+            examData.description = exam.description || '';
+            examData.subject_id = exam.subject_id;
+            examData.class = exam.class;
+            examData.exam_date = exam.exam_date || '';
+            examData.exam_time = exam.exam_time || '';
+            examData.duration_minutes = exam.duration_minutes;
+            examData.total_marks = exam.total_marks;
+
+            // Load sections
+            var { data: secs } = await db.from('exam_sections').select('*').eq('exam_id', examId).order('sort_order');
+            var { data: qs } = await db.from('questions').select('*').eq('exam_id', examId).order('sort_order');
+
+            examData.sections = (secs || []).map(function(sec) {
+                sec.questions = (qs || []).filter(function(q) { return q.section_id === sec.id; });
+                return sec;
+            });
+        }
+
+        var currentStep = 1;
+
+        function renderBuilder() {
+            var html = '';
+
+            // Header
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-hammer"></i> ' + (editingExamId ? 'Edit Exam' : 'Create New Exam') + '</h1>';
+            html += '<p class="subtitle">Build your exam step by step</p></div>';
+            html += '<a href="/teacher-dashboard.html" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>';
+            html += '</div>';
+
+            // Steps indicator
+            html += '<div class="d-flex justify-center gap-2 mb-3">';
+            for (var s = 1; s <= 3; s++) {
+                var active = s === currentStep ? 'btn-primary' : 'btn-secondary';
+                var icon = s === 1 ? 'fas fa-info-circle' : s === 2 ? 'fas fa-list' : 'fas fa-check-circle';
+                html += '<button class="btn btn-sm ' + active + '" onclick="goToStep(' + s + ')" ' + (s > currentStep + 1 ? 'disabled' : '') + '>';
+                html += '<i class="' + icon + '"></i> Step ' + s;
+                html += '</button>';
+            }
+            html += '</div>';
+
+            // Step 1: Exam Details
+            html += '<div class="' + (currentStep === 1 ? '' : 'hidden') + '" id="step1">';
+            html += renderStep1();
+            html += '</div>';
+
+            // Step 2: Questions
+            html += '<div class="' + (currentStep === 2 ? '' : 'hidden') + '" id="step2">';
+            html += renderStep2();
+            html += '</div>';
+
+            // Step 3: Review & Publish
+            html += '<div class="' + (currentStep === 3 ? '' : 'hidden') + '" id="step3">';
+            html += renderStep3();
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+            attachFileHandler();
+        }
+
+        function renderStep1() {
+            var html = '<div class="card">';
+            html += '<h2><i class="fas fa-info-circle"></i> Exam Details</h2>';
+            html += '<div class="form-group"><label>Exam Title *</label>';
+            html += '<input type="text" class="form-control" id="examTitle" value="' + escapeAttr(examData.title) + '" placeholder="e.g. ICT Mid-Term Examination"></div>';
+
+            html += '<div class="form-group"><label>Description</label>';
+            html += '<textarea class="form-control" id="examDesc" rows="2" placeholder="Optional instructions for students">' + escapeHtml(examData.description) + '</textarea></div>';
+
+            html += '<div class="form-row">';
+            html += '<div class="form-group"><label>Subject *</label><select class="form-control" id="examSubject">';
+            html += '<option value="">-- Select Subject --</option>';
+            subjects.forEach(function(s) {
+                var sel = s.id === examData.subject_id ? ' selected' : '';
+                html += '<option value="' + s.id + '" data-class="' + s.class + '"' + sel + '>' + s.name + ' (' + getClassLabel(s.class) + ')</option>';
+            });
+            html += '</select></div>';
+
+            html += '<div class="form-group"><label>Class *</label><select class="form-control" id="examClass">';
+            html += '<option value="">-- Select --</option>';
+            CLASS_OPTIONS.forEach(function(c) {
+                var sel = c.value === examData.class ? ' selected' : '';
+                html += '<option value="' + c.value + '"' + sel + '>' + c.label + '</option>';
+            });
+            html += '</select></div>';
+            html += '</div>';
+
+            html += '<div class="form-row">';
+            html += '<div class="form-group"><label>Exam Date</label>';
+            html += '<input type="date" class="form-control" id="examDate" value="' + examData.exam_date + '"></div>';
+            html += '<div class="form-group"><label>Exam Time</label>';
+            html += '<input type="time" class="form-control" id="examTime" value="' + examData.exam_time + '"></div>';
+            html += '</div>';
+
+            html += '<div class="form-row">';
+            html += '<div class="form-group"><label>Duration (minutes) *</label>';
+            html += '<input type="number" class="form-control" id="examDuration" value="' + examData.duration_minutes + '" min="5" max="180"></div>';
+            html += '<div class="form-group"><label>Total Marks</label>';
+            html += '<input type="number" class="form-control" id="examTotalMarks" value="' + examData.total_marks + '" min="1"></div>';
+            html += '</div>';
+
+            html += '<div class="text-center mt-3">';
+            html += '<button class="btn btn-primary btn-lg" onclick="saveStep1()"><i class="fas fa-arrow-right"></i> Next: Add Questions</button>';
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        function renderStep2() {
+            var html = '<div class="card mb-3">';
+            html += '<div class="d-flex justify-between align-center">';
+            html += '<h2><i class="fas fa-list"></i> Questions</h2>';
+            html += '<div class="btn-group">';
+            html += '<button class="btn btn-sm btn-success" onclick="addSection()"><i class="fas fa-plus"></i> Add Section</button>';
+            html += '<button class="btn btn-sm btn-info" onclick="document.getElementById(\'fileUploadArea\').classList.toggle(\'hidden\')"><i class="fas fa-upload"></i> Upload File</button>';
+            html += '</div></div>';
+
+            // File upload area
+            html += '<div class="hidden mt-3" id="fileUploadArea">';
+            html += '<div class="file-drop" id="fileDrop">';
+            html += '<i class="fas fa-cloud-upload-alt"></i>';
+            html += '<p><strong>Drag & drop</strong> a Word (.docx), PDF, or Text file here</p>';
+            html += '<p style="font-size:.82rem;color:#bbb">or click to browse &bull; Auto-detects questions, options &amp; answers</p>';
+            html += '<input type="file" id="fileInput" accept=".docx,.pdf,.txt" style="display:none">';
+            html += '</div>';
+            html += '<div id="parseResult" class="mt-2"></div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Sections
+            if (examData.sections.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-clipboard-list"></i><h3>No sections yet</h3>';
+                html += '<p>Add a section to start building questions.</p>';
+                html += '<button class="btn btn-success mt-2" onclick="addSection()"><i class="fas fa-plus"></i> Add Section</button></div>';
+            } else {
+                examData.sections.forEach(function(sec, sIdx) {
+                    html += '<div class="section-builder">';
+                    html += '<div class="section-builder-header">';
+                    html += '<div>';
+                    html += '<input type="text" class="form-control" value="' + escapeAttr(sec.section_name) + '" onchange="updateSection(' + sIdx + ', \'section_name\', this.value)" style="font-weight:700;font-size:1.1rem;width:auto;display:inline-block">';
+                    html += ' <select class="form-control" onchange="updateSection(' + sIdx + ', \'section_type\', this.value)" style="width:auto;display:inline-block">';
+                    html += '<option value="mcq"' + (sec.section_type === 'mcq' ? ' selected' : '') + '>MCQ</option>';
+                    html += '<option value="fill_blank"' + (sec.section_type === 'fill_blank' ? ' selected' : '') + '>Fill in the Blank</option>';
+                    html += '<option value="theory"' + (sec.section_type === 'theory' ? ' selected' : '') + '>Theory</option>';
+                    html += '</select>';
+                    html += ' Max marks: <input type="number" class="form-control" value="' + sec.max_marks + '" onchange="updateSection(' + sIdx + ', \'max_marks\', parseInt(this.value))" style="width:70px;display:inline-block">';
+                    html += '</div>';
+                    html += '<div class="btn-group">';
+                    html += '<button class="btn btn-sm btn-success" onclick="addQuestion(' + sIdx + ')"><i class="fas fa-plus"></i> Question</button>';
+                    html += '<button class="btn btn-sm btn-danger" onclick="removeSection(' + sIdx + ')"><i class="fas fa-trash"></i></button>';
+                    html += '</div>';
+                    html += '</div>';
+
+                    if (sec.instructions) {
+                        html += '<input type="text" class="form-control mb-2" value="' + escapeAttr(sec.instructions) + '" placeholder="Section instructions" onchange="updateSection(' + sIdx + ', \'instructions\', this.value)">';
+                    }
+
+                    // Questions
+                    var qs = sec.questions || [];
+                    qs.forEach(function(q, qIdx) {
+                        html += '<div class="question-item">';
+                        html += '<div class="d-flex justify-between align-center mb-1">';
+                        html += '<span class="question-number">Q' + (qIdx + 1) + '</span>';
+                        html += '<div class="d-flex gap-1 align-center">';
+                        html += '<label style="font-size:.82rem;margin:0">Marks:</label>';
+                        html += '<input type="number" class="form-control" value="' + q.marks + '" min="1" style="width:60px;padding:6px" onchange="updateQuestion(' + sIdx + ',' + qIdx + ',\'marks\',parseInt(this.value))">';
+                        html += '<button class="btn btn-sm btn-danger" onclick="removeQuestion(' + sIdx + ',' + qIdx + ')"><i class="fas fa-times"></i></button>';
+                        html += '</div></div>';
+
+                        html += '<div class="form-group" style="margin-bottom:10px">';
+                        html += '<textarea class="form-control" rows="2" placeholder="Question text" onchange="updateQuestion(' + sIdx + ',' + qIdx + ',\'question_text\',this.value)">' + escapeHtml(q.question_text || '') + '</textarea>';
+                        html += '</div>';
+
+                        if (sec.section_type === 'mcq') {
+                            var opts = q.options || ['', '', '', ''];
+                            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+                            for (var oi = 0; oi < 4; oi++) {
+                                html += '<input type="text" class="form-control" placeholder="Option ' + String.fromCharCode(65 + oi) + '" value="' + escapeAttr(opts[oi] || '') + '" onchange="updateOption(' + sIdx + ',' + qIdx + ',' + oi + ',this.value)">';
+                            }
+                            html += '</div>';
+                            html += '<div class="form-group" style="margin-bottom:0">';
+                            html += '<label style="font-size:.82rem">Correct Answer (type exact option text):</label>';
+                            html += '<input type="text" class="form-control" placeholder="e.g. Option A text" value="' + escapeAttr(q.correct_answer || '') + '" onchange="updateQuestion(' + sIdx + ',' + qIdx + ',\'correct_answer\',this.value)">';
+                            html += '</div>';
+                        } else {
+                            html += '<div class="form-group" style="margin-bottom:0">';
+                            html += '<label style="font-size:.82rem">Correct Answer:</label>';
+                            html += '<input type="text" class="form-control" placeholder="Expected answer" value="' + escapeAttr(q.correct_answer || '') + '" onchange="updateQuestion(' + sIdx + ',' + qIdx + ',\'correct_answer\',this.value)">';
+                            html += '</div>';
+                        }
+
+                        html += '</div>';
+                    });
+
+                    if (qs.length === 0) {
+                        html += '<p class="text-muted text-center p-2">No questions yet. Click "Question" to add one.</p>';
+                    }
+
+                    html += '</div>';
+                });
+            }
+
+            html += '<div class="d-flex justify-between mt-3">';
+            html += '<button class="btn btn-secondary" onclick="goToStep(1)"><i class="fas fa-arrow-left"></i> Back</button>';
+            html += '<button class="btn btn-primary btn-lg" onclick="goToStep(3)"><i class="fas fa-arrow-right"></i> Review & Publish</button>';
+            html += '</div>';
+
+            return html;
+        }
+
+        function renderStep3() {
+            var totalQ = 0;
+            examData.sections.forEach(function(s) { totalQ += (s.questions || []).length; });
+
+            var html = '<div class="card mb-3">';
+            html += '<h2><i class="fas fa-check-circle"></i> Review Exam</h2>';
+            html += '<table class="report-table mt-2">';
+            html += '<tr><th>Title</th><td>' + (examData.title || '-') + '</td></tr>';
+            var subName = '-';
+            var sub = subjects.find(function(s) { return s.id === examData.subject_id; });
+            if (sub) subName = sub.name;
+            html += '<tr><th>Subject</th><td>' + subName + '</td></tr>';
+            html += '<tr><th>Class</th><td>' + getClassLabel(examData.class) + '</td></tr>';
+            html += '<tr><th>Date / Time</th><td>' + (examData.exam_date || 'Not set') + ' ' + (examData.exam_time || '') + '</td></tr>';
+            html += '<tr><th>Duration</th><td>' + examData.duration_minutes + ' minutes</td></tr>';
+            html += '<tr><th>Total Marks</th><td>' + examData.total_marks + '</td></tr>';
+            html += '<tr><th>Sections</th><td>' + examData.sections.length + '</td></tr>';
+            html += '<tr><th>Total Questions</th><td>' + totalQ + '</td></tr>';
+            html += '</table></div>';
+
+            // Section summaries
+            examData.sections.forEach(function(sec) {
+                var qs = sec.questions || [];
+                html += '<div class="card mb-2"><h3>' + sec.section_name + ' (' + sec.section_type + ') — ' + sec.max_marks + ' marks, ' + qs.length + ' q(s)</h3>';
+                qs.forEach(function(q, i) {
+                    html += '<p style="margin:4px 0;font-size:.9rem"><strong>Q' + (i+1) + '.</strong> ' + (q.question_text || '<em>empty</em>').substring(0, 120) + '</p>';
+                });
+                html += '</div>';
+            });
+
+            html += '<div class="d-flex justify-between mt-3">';
+            html += '<button class="btn btn-secondary" onclick="goToStep(2)"><i class="fas fa-arrow-left"></i> Back to Edit</button>';
+            html += '<div class="btn-group">';
+            html += '<button class="btn btn-info btn-lg" onclick="saveExam(false)" id="saveDraftBtn"><i class="fas fa-save"></i> Save Draft</button>';
+            html += '<button class="btn btn-success btn-lg" onclick="saveExam(true)" id="publishBtn"><i class="fas fa-globe"></i> Save & Publish</button>';
+            html += '</div></div>';
+
+            return html;
+        }
+
+        function goToStep(step) {
+            if (step === 2) {
+                // Validate step 1
+                collectStep1Data();
+                if (!examData.title) { showToast('Please enter an exam title', 'error'); return; }
+                if (!examData.subject_id) { showToast('Please select a subject', 'error'); return; }
+                if (!examData.class) { showToast('Please select a class', 'error'); return; }
+            }
+            currentStep = step;
+            renderBuilder();
+        }
+
+        function collectStep1Data() {
+            var titleEl = document.getElementById('examTitle');
+            if (titleEl) {
+                examData.title = titleEl.value.trim();
+                examData.description = document.getElementById('examDesc').value.trim();
+                examData.subject_id = document.getElementById('examSubject').value;
+                examData.class = document.getElementById('examClass').value;
+                examData.exam_date = document.getElementById('examDate').value;
+                examData.exam_time = document.getElementById('examTime').value;
+                examData.duration_minutes = parseInt(document.getElementById('examDuration').value) || 30;
+                examData.total_marks = parseInt(document.getElementById('examTotalMarks').value) || 60;
+            }
+        }
+
+        function saveStep1() { goToStep(2); }
+
+        // Section / Question management
+        function addSection() {
+            var sIdx = examData.sections.length;
+            var typeGuess = sIdx === 0 ? 'mcq' : sIdx === 1 ? 'fill_blank' : 'theory';
+            var nameGuess = 'Section ' + String.fromCharCode(65 + sIdx);
+            examData.sections.push({
+                section_name: nameGuess,
+                section_type: typeGuess,
+                max_marks: 15,
+                instructions: '',
+                sort_order: sIdx,
+                questions: []
+            });
+            renderBuilder();
+        }
+
+        function removeSection(idx) {
+            if (!confirm('Remove this section and all its questions?')) return;
+            examData.sections.splice(idx, 1);
+            renderBuilder();
+        }
+
+        function updateSection(sIdx, field, value) {
+            examData.sections[sIdx][field] = value;
+        }
+
+        function addQuestion(sIdx) {
+            var sec = examData.sections[sIdx];
+            sec.questions.push({
+                question_text: '',
+                question_type: sec.section_type,
+                options: sec.section_type === 'mcq' ? ['', '', '', ''] : null,
+                correct_answer: '',
+                marks: sec.section_type === 'mcq' ? 3 : sec.section_type === 'fill_blank' ? 3 : 5,
+                sort_order: sec.questions.length
+            });
+            renderBuilder();
+        }
+
+        function removeQuestion(sIdx, qIdx) {
+            examData.sections[sIdx].questions.splice(qIdx, 1);
+            renderBuilder();
+        }
+
+        function updateQuestion(sIdx, qIdx, field, value) {
+            examData.sections[sIdx].questions[qIdx][field] = value;
+        }
+
+        function updateOption(sIdx, qIdx, optIdx, value) {
+            var q = examData.sections[sIdx].questions[qIdx];
+            if (!q.options) q.options = ['', '', '', ''];
+            q.options[optIdx] = value;
+        }
+
+        // File upload & parsing
+        function attachFileHandler() {
+            var drop = document.getElementById('fileDrop');
+            var input = document.getElementById('fileInput');
+            if (!drop || !input) return;
+
+            drop.addEventListener('click', function() { input.click(); });
+            drop.addEventListener('dragover', function(e) { e.preventDefault(); drop.classList.add('dragover'); });
+            drop.addEventListener('dragleave', function() { drop.classList.remove('dragover'); });
+            drop.addEventListener('drop', function(e) {
+                e.preventDefault();
+                drop.classList.remove('dragover');
+                if (e.dataTransfer.files.length) parseFile(e.dataTransfer.files[0]);
+            });
+            input.addEventListener('change', function() {
+                if (input.files.length) parseFile(input.files[0]);
+            });
+        }
+
+        async function parseFile(file) {
+            var result = document.getElementById('parseResult');
+            result.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Parsing ' + file.name + '...</div>';
+
+            try {
+                var text = '';
+                if (file.name.endsWith('.docx')) {
+                    var arrayBuf = await file.arrayBuffer();
+                    var mResult = await mammoth.extractRawText({ arrayBuffer: arrayBuf });
+                    text = mResult.value;
+                } else if (file.name.endsWith('.pdf')) {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                    var arrayBuf = await file.arrayBuffer();
+                    var pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+                    for (var i = 1; i <= pdf.numPages; i++) {
+                        var page = await pdf.getPage(i);
+                        var content = await page.getTextContent();
+                        text += content.items.map(function(item) { return item.str; }).join(' ') + '\n';
+                    }
+                } else if (file.name.endsWith('.txt')) {
+                    text = await file.text();
+                } else {
+                    throw new Error('Unsupported file type. Please upload .docx, .pdf or .txt');
+                }
+
+                var parsed = parseQuestionsFromText(text);
+                if (parsed.length === 0) {
+                    result.innerHTML = '<div class="alert alert-warning">Could not auto-detect questions. The extracted text is shown below — you can manually copy questions from it.</div>'
+                        + '<pre style="max-height:300px;overflow:auto;background:#f5f5f5;padding:12px;border-radius:8px;font-size:.85rem;white-space:pre-wrap">' + escapeHtml(text) + '</pre>';
+                    return;
+                }
+
+                result.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> Found <strong>' + parsed.length + '</strong> question(s)! Review below and click "Import All" to add them.</div>';
+
+                // Count by type
+                var counts = { mcq: 0, fill_blank: 0, theory: 0 };
+                parsed.forEach(function(q) { counts[q.type] = (counts[q.type] || 0) + 1; });
+                var typeSummary = '';
+                if (counts.mcq) typeSummary += '<span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:12px;font-size:.82rem;margin-right:6px"><i class="fas fa-list"></i> ' + counts.mcq + ' MCQ</span>';
+                if (counts.fill_blank) typeSummary += '<span style="background:#e3f2fd;color:#1565c0;padding:3px 10px;border-radius:12px;font-size:.82rem;margin-right:6px"><i class="fas fa-pen"></i> ' + counts.fill_blank + ' Fill-in</span>';
+                if (counts.theory) typeSummary += '<span style="background:#fff3e0;color:#e65100;padding:3px 10px;border-radius:12px;font-size:.82rem"><i class="fas fa-pencil-alt"></i> ' + counts.theory + ' Theory</span>';
+                result.innerHTML += '<div class="mb-2">' + typeSummary + '</div>';
+
+                // Show parsed preview
+                var preview = '<div class="card mt-2" style="max-height:400px;overflow:auto;padding:0">';
+                parsed.forEach(function(q, i) {
+                    var typeColor = q.type === 'mcq' ? '#2e7d32' : q.type === 'fill_blank' ? '#1565c0' : '#e65100';
+                    var typeLabel = q.type === 'mcq' ? 'MCQ' : q.type === 'fill_blank' ? 'Fill-in' : 'Theory';
+                    preview += '<div style="padding:10px 14px;border-bottom:1px solid #eee">';
+                    preview += '<div class="d-flex justify-between align-center">';
+                    preview += '<strong style="color:#333">Q' + (i+1) + '.</strong> ';
+                    preview += '<span style="background:' + typeColor + '22;color:' + typeColor + ';padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:700">' + typeLabel + '</span>';
+                    preview += '</div>';
+                    preview += '<div style="margin:4px 0;font-size:.9rem">' + escapeHtml(q.text).substring(0, 200) + '</div>';
+                    if (q.options.length) {
+                        preview += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:4px 0">';
+                        q.options.forEach(function(opt, oi) {
+                            var isCorrect = q.answer && opt === q.answer;
+                            preview += '<span style="font-size:.82rem;color:#555;' + (isCorrect ? 'color:#2e7d32;font-weight:700' : '') + '">' + String.fromCharCode(65 + oi) + '. ' + escapeHtml(opt).substring(0, 60) + (isCorrect ? ' ✓' : '') + '</span>';
+                        });
+                        preview += '</div>';
+                    }
+                    if (q.answer && q.type !== 'mcq') {
+                        preview += '<div style="font-size:.82rem;color:#2e7d32;margin-top:2px"><i class="fas fa-check-circle"></i> Answer: ' + escapeHtml(q.answer).substring(0, 80) + '</div>';
+                    }
+                    preview += '</div>';
+                });
+                preview += '</div>';
+                preview += '<div class="d-flex gap-2 mt-2">';
+                preview += '<button class="btn btn-success" onclick="importParsedQuestions()"><i class="fas fa-download"></i> Import All (' + parsed.length + ')</button>';
+                preview += '<button class="btn btn-secondary" onclick="document.getElementById(\'parseResult\').innerHTML=\'\'"><i class="fas fa-times"></i> Cancel</button>';
+                preview += '</div>';
+                result.innerHTML += preview;
+
+                // Store parsed for import
+                window._parsedQuestions = parsed;
+
+            } catch (err) {
+                result.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> ' + err.message + '</div>';
+            }
+        }
+
+        // =============================================
+        // SMART QUESTION PARSER — handles many formats
+        // =============================================
+
+        // Detect if a line is a section header
+        function isSectionHeader(line) {
+            var patterns = [
+                /^section\s+[a-zA-Z0-9]/i,
+                /^part\s+[a-zA-Z0-9]/i,
+                /^(objective|theory|essay|practical|fill[\s\-]?in|multiple[\s\-]?choice|mcq|short[\s\-]?answer)/i,
+                /^[A-Z]\.\s*(objective|theory|essay|fill|multiple|mcq|short)/i,
+                /^part\s+[a-zA-Z0-9]\s*:\s*(objective|theory|essay|fill|mcq|short|practical)/i
+            ];
+            for (var i = 0; i < patterns.length; i++) {
+                if (patterns[i].test(line.trim())) return true;
+            }
+            return false;
+        }
+
+        // Guess section type from header text
+        function guessSectionType(header) {
+            var h = header.toLowerCase();
+            if (/objective|mcq|multiple[\s\-]?choice|choose|tick|circle/.test(h)) return 'mcq';
+            if (/fill[\s\-]?in|blank|complete/.test(h)) return 'fill_blank';
+            if (/theory|essay|explain|discuss|describe|short[\s\-]?answer|subjective/.test(h)) return 'theory';
+            return null;
+        }
+
+        // Detect if a line starts a new question
+        function matchQuestionStart(line) {
+            var patterns = [
+                /^(\d{1,3})\s*[\.\)\]\:\-]\s+(.+)/,          // 1. Question  |  1) Question  |  1: Question
+                /^Q(\d{1,3})\s*[\.\)\]\:\-]?\s+(.+)/i,       // Q1. Question |  Q1) Question
+                /^Question\s+(\d{1,3})\s*[\.\)\]\:\-]?\s*(.*)/i, // Question 1: ...
+                /^No\.?\s*(\d{1,3})\s*[\.\)\]\:\-]?\s+(.+)/i,   // No.1 Question | No 1. Question
+                /^\((\d{1,3})\)\s+(.+)/                        // (1) Question
+            ];
+            for (var i = 0; i < patterns.length; i++) {
+                var m = line.match(patterns[i]);
+                if (m) return { num: parseInt(m[1]), text: (m[2] || '').trim() };
+            }
+            return null;
+        }
+
+        // Detect if a line is an option (a., b., A), (a), etc.)
+        function matchOption(line) {
+            var patterns = [
+                /^([a-dA-D])\s*[\.\)\]]\s+(.+)/,        // a. Option  |  A) Option
+                /^\(([a-dA-D])\)\s+(.+)/i,               // (a) Option | (A) Option
+                /^([a-dA-D])\s*[\:\-]\s+(.+)/,           // a: Option  |  a- Option
+                /^Option\s+([a-dA-D])\s*[\.\)\:\-]?\s*(.*)/i  // Option A. text
+            ];
+            for (var i = 0; i < patterns.length; i++) {
+                var m = line.match(patterns[i]);
+                if (m) return { letter: m[1].toUpperCase(), text: (m[2] || '').trim() };
+            }
+            return null;
+        }
+
+        // Detect "Answer: X" line
+        function matchAnswer(line) {
+            var m = line.match(/^(?:Answer|Ans|Correct(?:\s+Answer)?)\s*[\:\=\-]\s*(.+)/i);
+            if (m) return m[1].trim();
+            return null;
+        }
+
+        // Detect fill-in-the-blank patterns in question text
+        function hasBlanks(text) {
+            return /_{2,}|\[blank\]|\[___+\]|\(\s*\)/.test(text);
+        }
+
+        // =============================================
+        // PRE-PROCESSOR: Fix messy extracted text
+        // =============================================
+        function preProcessText(text) {
+            // Step 1: Split inline options that got concatenated
+            // e.g. "a) animalb) machinec) treed) food" → separate lines
+            // Pattern: a letter a-d followed by ) that's glued to previous word
+            text = text.replace(/([a-zA-Z0-9.,;!?_])([a-dA-D]\s*[\)\.\]])/g, '$1\n$2');
+
+            // Step 2: Also split "Answer: X" stuck to previous text
+            text = text.replace(/([a-zA-Z0-9.,;!?_])((?:Answer|Ans)\s*[:=\-])/gi, '$1\n$2');
+
+            // Step 3: Split numbered questions stuck together  
+            // e.g. "food2. A printer" → "food\n2. A printer"
+            text = text.replace(/([a-zA-Z0-9.,;!?_])\s*(\d{1,3}\s*[\.\)\]\:\-]\s+[A-Z])/g, '$1\n$2');
+
+            // Step 4: Split "Part X:" or "Section X" stuck to previous text
+            text = text.replace(/([a-zA-Z0-9.,;!?_])\s*((?:Part|Section)\s+[A-Za-z0-9])/gi, '$1\n$2');
+
+            // Step 5: If no numbered questions found, try to detect sentence-based questions
+            // Look for patterns like "A computer is a ______." followed by options
+            var hasNumberedQ = /(?:^|\n)\s*\d{1,3}\s*[\.\)\]\:\-]\s+/m.test(text);
+            if (!hasNumberedQ) {
+                // Insert artificial numbers before sentences that contain blanks or end with ?
+                // and are followed by option-like content
+                var lines = text.split(/\r?\n/);
+                var result = [];
+                var qNum = 1;
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line) { result.push(''); continue; }
+
+                    // Skip known headers / instructions
+                    if (isInstructionLine(line)) { result.push(line); continue; }
+                    if (isSectionHeader(line)) { result.push(line); continue; }
+
+                    // Check if this line looks like a question (has blank, ends with ?, or is a sentence with options after it)
+                    var looksLikeQuestion = false;
+                    if (hasBlanks(line)) looksLikeQuestion = true;
+                    if (/\?\s*$/.test(line)) looksLikeQuestion = true;
+
+                    // Also check: is the NEXT non-empty line an option?
+                    if (!looksLikeQuestion) {
+                        for (var j = i + 1; j < lines.length && j <= i + 2; j++) {
+                            var nextLine = lines[j].trim();
+                            if (nextLine && matchOption(nextLine)) { looksLikeQuestion = true; break; }
+                        }
+                    }
+
+                    // Check if this line already starts with a number
+                    var alreadyNumbered = /^\d{1,3}\s*[\.\)\]\:\-]\s+/.test(line);
+
+                    // Check if this line is itself an option
+                    var isOpt = matchOption(line);
+
+                    if (looksLikeQuestion && !alreadyNumbered && !isOpt) {
+                        result.push(qNum + '. ' + line);
+                        qNum++;
+                    } else {
+                        result.push(line);
+                    }
+                }
+                text = result.join('\n');
+            }
+
+            return text;
+        }
+
+        // Detect instruction lines to skip
+        function isInstructionLine(line) {
+            var patterns = [
+                /^attempt\s+all/i,
+                /^answer\s+all/i,
+                /^choose\s+the\s+(correct|right|best)/i,
+                /^erase\s+completely/i,
+                /^instructions?\s*:/i,
+                /^note\s*:/i,
+                /^use\s+(pen|pencil|biro)/i,
+                /^do\s+not\s+/i,
+                /^time\s+allowed/i,
+                /^total\s+marks/i,
+                /^name\s*:/i,
+                /^class\s*:/i,
+                /^date\s*:/i,
+                /^subject\s*:/i,
+                /^school\s*:/i,
+                /^term\s*:/i
+            ];
+            for (var i = 0; i < patterns.length; i++) {
+                if (patterns[i].test(line.trim())) return true;
+            }
+            return false;
+        }
+
+        function parseQuestionsFromText(rawText) {
+            // Pre-process to fix Word/PDF extraction issues
+            var text = preProcessText(rawText);
+
+            var allQuestions = [];
+            var lines = text.split(/\r?\n/).map(function(l) { return l.trim(); });
+
+            var currentQ = null;
+            var currentSectionHint = null; // 'mcq', 'fill_blank', 'theory', or null
+
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if (!line) continue;
+
+                // Check for section header
+                if (isSectionHeader(line)) {
+                    // Push any pending question
+                    if (currentQ) { allQuestions.push(currentQ); currentQ = null; }
+                    var guessed = guessSectionType(line);
+                    if (guessed) currentSectionHint = guessed;
+                    continue;
+                }
+
+                // Check for answer line (applies to last question)
+                var ans = matchAnswer(line);
+                if (ans && currentQ) {
+                    // Resolve answer: if single letter A-D map to option text
+                    if (/^[a-dA-D]$/i.test(ans) && currentQ.options.length > 0) {
+                        var idx = ans.toUpperCase().charCodeAt(0) - 65;
+                        if (idx >= 0 && idx < currentQ.options.length) {
+                            currentQ.answer = currentQ.options[idx];
+                        } else {
+                            currentQ.answer = ans;
+                        }
+                    } else {
+                        currentQ.answer = ans;
+                    }
+                    continue;
+                }
+
+                // Check for question start
+                var qMatch = matchQuestionStart(line);
+                if (qMatch) {
+                    if (currentQ) allQuestions.push(currentQ);
+                    currentQ = { text: qMatch.text, options: [], answer: '', sectionHint: currentSectionHint };
+                    continue;
+                }
+
+                // Check for option line
+                var optMatch = matchOption(line);
+                if (optMatch && currentQ) {
+                    currentQ.options.push(optMatch.text);
+                    continue;
+                }
+
+                // Continuation text
+                if (currentQ) {
+                    if (currentQ.options.length > 0) {
+                        // Might be continuation of last option
+                        currentQ.options[currentQ.options.length - 1] += ' ' + line;
+                    } else {
+                        currentQ.text += ' ' + line;
+                    }
+                }
+            }
+            if (currentQ) allQuestions.push(currentQ);
+
+            // Auto-classify each question if not already hinted
+            allQuestions.forEach(function(q) {
+                if (!q.type) {
+                    if (q.options.length >= 2) {
+                        q.type = 'mcq';
+                    } else if (hasBlanks(q.text)) {
+                        q.type = 'fill_blank';
+                    } else if (q.sectionHint) {
+                        q.type = q.sectionHint;
+                    } else {
+                        // Heuristic: short questions without options → fill_blank, longer → theory
+                        q.type = q.text.length < 120 ? 'fill_blank' : 'theory';
+                    }
+                }
+            });
+
+            return allQuestions;
+        }
+
+        function importParsedQuestions() {
+            var parsed = window._parsedQuestions;
+            if (!parsed || !parsed.length) return;
+
+            // Group questions by detected type
+            var groups = { mcq: [], fill_blank: [], theory: [] };
+            parsed.forEach(function(pq) {
+                var t = pq.type || 'fill_blank';
+                if (!groups[t]) groups[t] = [];
+                groups[t].push(pq);
+            });
+
+            var sectionNames = {
+                mcq: 'Objective (MCQ)',
+                fill_blank: 'Fill in the Blank',
+                theory: 'Theory / Essay'
+            };
+
+            var sectionOrder = ['mcq', 'fill_blank', 'theory'];
+            var totalImported = 0;
+
+            sectionOrder.forEach(function(type) {
+                var qs = groups[type];
+                if (!qs || qs.length === 0) return;
+
+                // Find existing section of same type, or create new
+                var sec = null;
+                for (var i = 0; i < examData.sections.length; i++) {
+                    if (examData.sections[i].section_type === type) { sec = examData.sections[i]; break; }
+                }
+                if (!sec) {
+                    sec = {
+                        section_name: sectionNames[type] || 'Section',
+                        section_type: type,
+                        max_marks: 0,
+                        instructions: '',
+                        sort_order: examData.sections.length,
+                        questions: []
+                    };
+                    examData.sections.push(sec);
+                }
+
+                qs.forEach(function(pq) {
+                    var marks = type === 'mcq' ? 3 : type === 'fill_blank' ? 3 : 5;
+                    var opts = null;
+                    if (type === 'mcq') {
+                        opts = (pq.options || []).slice(0, 4);
+                        while (opts.length < 4) opts.push('');
+                    }
+                    sec.questions.push({
+                        question_text: pq.text,
+                        question_type: type,
+                        options: opts,
+                        correct_answer: pq.answer || '',
+                        marks: marks,
+                        sort_order: sec.questions.length
+                    });
+                    sec.max_marks += marks;
+                    totalImported++;
+                });
+            });
+
+            showToast('Imported ' + totalImported + ' question(s) into ' + examData.sections.length + ' section(s)', 'success');
+            renderBuilder();
+        }
+
+        // Save exam to Supabase
+        async function saveExam(publish) {
+            collectStep1Data();
+
+            var btnId = publish ? 'publishBtn' : 'saveDraftBtn';
+            var btn = document.getElementById(btnId);
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loader" style="width:18px;height:18px;border-width:2px"></span> Saving...'; }
+
+            try {
+                // Validate
+                if (!examData.title) throw new Error('Exam title is required');
+                if (!examData.subject_id) throw new Error('Subject is required');
+                if (!examData.class) throw new Error('Class is required');
+
+                var examPayload = {
+                    title: examData.title,
+                    description: examData.description,
+                    subject_id: examData.subject_id,
+                    school_id: profile.school_id,
+                    class: examData.class,
+                    exam_date: examData.exam_date || null,
+                    exam_time: examData.exam_time || null,
+                    duration_minutes: examData.duration_minutes,
+                    total_marks: examData.total_marks,
+                    is_published: publish,
+                    created_by: profile.id
+                };
+
+                var examId;
+
+                if (editingExamId) {
+                    var { error } = await db.from('exams').update(examPayload).eq('id', editingExamId);
+                    if (error) throw error;
+                    examId = editingExamId;
+
+                    // Delete old sections & questions (cascade)
+                    await db.from('exam_sections').delete().eq('exam_id', examId);
+                } else {
+                    var { data: newExam, error } = await db.from('exams').insert(examPayload).select().single();
+                    if (error) throw error;
+                    examId = newExam.id;
+                    editingExamId = examId;
+                }
+
+                // Insert sections and questions
+                for (var sIdx = 0; sIdx < examData.sections.length; sIdx++) {
+                    var sec = examData.sections[sIdx];
+                    var secPayload = {
+                        exam_id: examId,
+                        section_name: sec.section_name,
+                        section_type: sec.section_type,
+                        max_marks: sec.max_marks,
+                        instructions: sec.instructions || null,
+                        sort_order: sIdx
+                    };
+
+                    var { data: newSec, error: secErr } = await db.from('exam_sections').insert(secPayload).select().single();
+                    if (secErr) throw secErr;
+
+                    var qs = sec.questions || [];
+                    for (var qIdx = 0; qIdx < qs.length; qIdx++) {
+                        var q = qs[qIdx];
+                        var qPayload = {
+                            exam_id: examId,
+                            section_id: newSec.id,
+                            question_text: q.question_text,
+                            question_type: q.question_type || sec.section_type,
+                            options: q.options ? JSON.stringify(q.options) : null,
+                            correct_answer: q.correct_answer || null,
+                            marks: q.marks || 1,
+                            sort_order: qIdx
+                        };
+                        var { error: qErr } = await db.from('questions').insert(qPayload);
+                        if (qErr) throw qErr;
+                    }
+                }
+
+                showToast(publish ? 'Exam published! Students can now see it.' : 'Exam saved as draft.', 'success');
+                setTimeout(function() {
+                    window.location.href = '/teacher-dashboard.html';
+                }, 1000);
+
+            } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = publish ? '<i class="fas fa-globe"></i> Save & Publish' : '<i class="fas fa-save"></i> Save Draft'; }
+            }
+        }
+
+        function escapeHtml(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+        function escapeAttr(s) { return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+        init();
+    </script>
+</body>
+</html>

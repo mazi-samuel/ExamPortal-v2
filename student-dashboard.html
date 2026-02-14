@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading your dashboard...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        let profile = null;
+
+        async function init() {
+            profile = await requireAuth(['student']);
+            if (!profile) return;
+            renderNav(profile);
+            await renderDashboard();
+        }
+
+        async function renderDashboard() {
+            var schoolName = profile.schools ? profile.schools.name : 'Your School';
+            var classLabel = getClassWithSection(profile.class, profile.class_section);
+
+            // Fetch available exams for this student's school + class (base grade)
+            // e.g. a Grade 1A student sees all Grade 1 exams
+            var baseGrade = getBaseGrade(profile.class);
+            var { data: exams } = await db
+                .from('exams')
+                .select('*, subjects(name, icon)')
+                .eq('school_id', profile.school_id)
+                .eq('class', baseGrade)
+                .eq('is_published', true)
+                .order('exam_date', { ascending: false });
+            exams = exams || [];
+
+            // Fetch this student's submissions
+            var { data: submissions } = await db
+                .from('exam_submissions')
+                .select('*, exams(title, class, subjects(name))')
+                .eq('student_id', profile.id)
+                .order('submitted_at', { ascending: false });
+            submissions = submissions || [];
+
+            var submittedExamIds = submissions.filter(function(s){ return s.submitted_at; }).map(function(s){ return s.exam_id; });
+            var availableExams = exams.filter(function(e){ return submittedExamIds.indexOf(e.id) === -1; });
+            var completedCount = submissions.filter(function(s){ return s.submitted_at; }).length;
+            var avgPct = 0;
+            if (completedCount > 0) {
+                avgPct = Math.round(submissions.filter(function(s){ return s.submitted_at; })
+                    .reduce(function(a, s){ return a + (s.percentage || 0); }, 0) / completedCount);
+            }
+
+            var html = '';
+
+            // Welcome
+            html += '<div class="text-center mb-3">';
+            html += '<h1>👋 Welcome, ' + profile.full_name + '!</h1>';
+            html += '<p class="subtitle">' + schoolName + ' &bull; ' + classLabel + '</p>';
+            html += '</div>';
+
+            // Stats
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + availableExams.length + '</span><span class="stat-label">Available Exams</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + completedCount + '</span><span class="stat-label">Completed</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + avgPct + '%</span><span class="stat-label">Average Score</span></div>';
+            html += '</div>';
+
+            // Tabs
+            html += '<div class="tabs">';
+            html += '<button class="tab-btn active" onclick="switchTab(\'exams\')"><i class="fas fa-file-alt"></i> Available Exams</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'results\')"><i class="fas fa-poll"></i> My Results</button>';
+            html += '</div>';
+
+            // Available Exams tab
+            html += '<div class="tab-content active" id="tab-exams">';
+            if (availableExams.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-clipboard-check"></i><h3>No exams available right now</h3><p>Check back later for new exams.</p></div>';
+            } else {
+                html += '<div class="grid grid-2">';
+                availableExams.forEach(function(exam) {
+                    var subjectName = exam.subjects ? exam.subjects.name : 'Subject';
+                    var subjectIcon = (exam.subjects && exam.subjects.icon) ? exam.subjects.icon : 'fas fa-book';
+                    var dateStr = exam.exam_date ? formatDate(exam.exam_date) : 'Anytime';
+                    var timeStr = exam.exam_time ? formatTime(exam.exam_time) : '';
+
+                    html += '<div class="exam-card">';
+                    html += '<div class="exam-card-header">';
+                    html += '<div class="exam-card-icon"><i class="' + subjectIcon + '"></i></div>';
+                    html += '<div><h3 style="color:#4a47a3;margin:0">' + exam.title + '</h3>';
+                    html += '<span style="color:#999;font-size:.88rem">' + subjectName + '</span></div>';
+                    html += '</div>';
+                    if (exam.description) html += '<p style="color:#666;font-size:.92rem;margin-bottom:8px">' + exam.description + '</p>';
+                    html += '<div class="exam-card-meta">';
+                    html += '<span><i class="fas fa-calendar"></i> ' + dateStr + '</span>';
+                    if (timeStr) html += '<span><i class="fas fa-clock"></i> ' + timeStr + '</span>';
+                    html += '<span><i class="fas fa-hourglass-half"></i> ' + exam.duration_minutes + ' min</span>';
+                    html += '<span><i class="fas fa-star"></i> ' + exam.total_marks + ' marks</span>';
+                    html += '</div>';
+                    html += '<div class="exam-card-footer">';
+                    html += '<a href="/take-exam.html?id=' + exam.id + '" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start Exam</a>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Results tab
+            html += '<div class="tab-content" id="tab-results">';
+            if (completedCount === 0) {
+                html += '<div class="empty-state"><i class="fas fa-chart-bar"></i><h3>No results yet</h3><p>Take an exam to see your scores here.</p></div>';
+            } else {
+                html += '<div class="table-wrap"><table><thead><tr>';
+                html += '<th>S/N</th><th>Exam</th><th>Subject</th><th>Score</th><th>%</th><th>Grade</th><th>Date</th><th></th>';
+                html += '</tr></thead><tbody>';
+                var idx = 0;
+                submissions.filter(function(s){return s.submitted_at;}).forEach(function(s) {
+                    idx++;
+                    var examTitle = s.exams ? s.exams.title : '-';
+                    var subjectName = (s.exams && s.exams.subjects) ? s.exams.subjects.name : '-';
+                    var gc = getGradeClass(s.grade_letter);
+                    html += '<tr>';
+                    html += '<td>' + idx + '</td>';
+                    html += '<td>' + examTitle + '</td>';
+                    html += '<td>' + subjectName + '</td>';
+                    html += '<td><strong>' + (s.total_score || 0) + '/' + (s.max_score || 60) + '</strong></td>';
+                    html += '<td>' + Math.round(s.percentage || 0) + '%</td>';
+                    html += '<td><span class="grade-badge ' + gc + '">' + (s.grade_letter || '-') + '</span></td>';
+                    html += '<td>' + formatDate(s.submitted_at) + '</td>';
+                    html += '<td><a href="/student-report.html?submission=' + s.id + '" class="btn btn-sm btn-info"><i class="fas fa-eye"></i></a></td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+
+            // Check hash for tab
+            if (window.location.hash === '#results') switchTab('results');
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(function(b, i) {
+                b.classList.toggle('active', (tab === 'exams' && i === 0) || (tab === 'results' && i === 1));
+            });
+            document.querySelectorAll('.tab-content').forEach(function(c) {
+                c.classList.remove('active');
+            });
+            var el = document.getElementById('tab-' + tab);
+            if (el) el.classList.add('active');
+        }
+
+        init();
+    </script>
+</body>
+</html>

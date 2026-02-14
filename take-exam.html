@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Exam - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <!-- Timer Bar (shown during exam) -->
+    <div class="timer-bar hidden" id="timerBar">
+        <span id="examTitleBar" style="font-weight:700;color:#4a47a3"></span>
+        <div class="timer-progress"><div class="timer-progress-bar" id="timerProgressBar" style="width:100%"></div></div>
+        <span class="timer-display" id="timerDisplay">00:00</span>
+        <span class="badge badge-info" id="sectionIndicator" style="font-size:.8rem;margin-left:6px"></span>
+    </div>
+
+    <div class="page-wrap" id="pageWrap" style="padding-top:10px">
+        <div class="container container-md" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading exam...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var exam = null;
+        var sections = [];
+        var questions = [];
+        var answers = {};       // { question_id: "answer" }
+        var submission = null;
+        var timerInterval = null;
+        var totalSeconds = 0;
+        var remainingSeconds = 0;
+        var examStarted = false;
+
+        async function init() {
+            profile = await requireAuth(['student']);
+            if (!profile) return;
+            renderNav(profile);
+
+            var params = new URLSearchParams(window.location.search);
+            var examId = params.get('id');
+            if (!examId) {
+                document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>No exam specified</h3><a href="/student-dashboard.html" class="btn btn-primary mt-2">Back to Dashboard</a></div>';
+                return;
+            }
+
+            // Load exam
+            var { data: examData, error } = await db
+                .from('exams')
+                .select('*, subjects(name, icon)')
+                .eq('id', examId)
+                .single();
+            if (error || !examData) {
+                document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Exam not found</h3><a href="/student-dashboard.html" class="btn btn-primary mt-2">Back to Dashboard</a></div>';
+                return;
+            }
+            exam = examData;
+
+            // Check if already submitted
+            var { data: existingSub } = await db
+                .from('exam_submissions')
+                .select('*')
+                .eq('exam_id', exam.id)
+                .eq('student_id', profile.id)
+                .maybeSingle();
+
+            if (existingSub && existingSub.submitted_at) {
+                // Already submitted
+                document.getElementById('mainContent').innerHTML =
+                    '<div class="text-center" style="padding:60px 20px">'
+                    + '<i class="fas fa-check-circle" style="font-size:4rem;color:#4caf50"></i>'
+                    + '<h2 class="mt-2">You already completed this exam!</h2>'
+                    + '<p class="subtitle">Score: <strong>' + existingSub.total_score + '/' + existingSub.max_score + '</strong> (' + Math.round(existingSub.percentage) + '%) — Grade: <strong>' + existingSub.grade_letter + '</strong></p>'
+                    + '<div class="btn-group justify-center mt-3">'
+                    + '<a href="/student-report.html?submission=' + existingSub.id + '" class="btn btn-info"><i class="fas fa-eye"></i> View Report</a>'
+                    + '<a href="/student-dashboard.html" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Dashboard</a>'
+                    + '</div></div>';
+                return;
+            }
+
+            // If there's an in-progress submission, resume it
+            if (existingSub && !existingSub.submitted_at) {
+                submission = existingSub;
+                answers = existingSub.answers || {};
+            }
+
+            // Load sections and questions
+            var { data: secs } = await db.from('exam_sections').select('*').eq('exam_id', exam.id).order('sort_order');
+            sections = secs || [];
+
+            var { data: qs } = await db.from('questions').select('*').eq('exam_id', exam.id).order('sort_order');
+            questions = qs || [];
+
+            showInstructions();
+        }
+
+        function showInstructions() {
+            var subjectName = exam.subjects ? exam.subjects.name : '';
+            var html = '';
+            html += '<div class="text-center mb-3">';
+            html += '<i class="fas fa-file-alt" style="font-size:3rem;color:#667eea"></i>';
+            html += '<h1 class="mt-2">' + exam.title + '</h1>';
+            html += '<p class="subtitle">' + subjectName + ' &bull; ' + getClassLabel(exam.class) + '</p>';
+            html += '</div>';
+
+            html += '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-info-circle"></i> Exam Instructions</h3>';
+            html += '<ul style="margin:12px 0 0 20px;line-height:2;color:#555">';
+            html += '<li>This exam has <strong>' + sections.length + ' section(s)</strong> and <strong>' + questions.length + ' question(s)</strong>.</li>';
+            html += '<li>Total marks: <strong>' + exam.total_marks + '</strong></li>';
+            html += '<li>Duration: <strong>' + exam.duration_minutes + ' minutes</strong></li>';
+            html += '<li>The timer starts as soon as you click "Start Exam".</li>';
+            html += '<li>If time runs out, your exam will be <strong>auto-submitted</strong>.</li>';
+            html += '<li>Once submitted, you cannot change your answers.</li>';
+            html += '</ul>';
+
+            if (exam.description) {
+                html += '<p style="margin-top:12px;color:#666">' + exam.description + '</p>';
+            }
+            html += '</div>';
+
+            // Section breakdown
+            html += '<div class="card mb-3"><h3><i class="fas fa-list"></i> Sections</h3>';
+            html += '<table class="report-table mt-2"><thead><tr><th>Section</th><th>Type</th><th>Questions</th><th>Max Marks</th></tr></thead><tbody>';
+            sections.forEach(function(sec) {
+                var qCount = questions.filter(function(q) { return q.section_id === sec.id; }).length;
+                var typeLabel = sec.section_type === 'mcq' ? 'Multiple Choice' : sec.section_type === 'fill_blank' ? 'Fill in the Blank' : 'Theory';
+                html += '<tr><td>' + sec.section_name + '</td><td>' + typeLabel + '</td><td>' + qCount + '</td><td>' + sec.max_marks + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+
+            if (submission) {
+                html += '<div class="alert alert-warning"><i class="fas fa-redo"></i> You have an in-progress attempt. Your previous answers will be restored.</div>';
+            }
+
+            html += '<div class="text-center mt-3">';
+            html += '<button class="btn btn-success btn-lg" onclick="startExam()"><i class="fas fa-play"></i> Start Exam</button>';
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        async function startExam() {
+            examStarted = true;
+
+            // Create submission if not resuming
+            if (!submission) {
+                var { data: newSub, error } = await db.from('exam_submissions').insert({
+                    exam_id: exam.id,
+                    student_id: profile.id,
+                    started_at: new Date().toISOString(),
+                    max_score: exam.total_marks,
+                    answers: {}
+                }).select().single();
+                if (error) {
+                    showToast('Failed to start exam: ' + error.message, 'error');
+                    return;
+                }
+                submission = newSub;
+            }
+
+            // Calculate remaining time
+            totalSeconds = exam.duration_minutes * 60;
+            if (submission.started_at) {
+                var elapsed = Math.floor((Date.now() - new Date(submission.started_at).getTime()) / 1000);
+                remainingSeconds = Math.max(0, totalSeconds - elapsed);
+            } else {
+                remainingSeconds = totalSeconds;
+            }
+
+            if (remainingSeconds <= 0) {
+                await submitExam(true);
+                return;
+            }
+
+            // Show timer
+            document.getElementById('timerBar').classList.remove('hidden');
+            document.getElementById('examTitleBar').textContent = exam.title;
+            document.getElementById('pageWrap').style.paddingTop = '80px';
+
+            startTimer();
+            renderQuestions();
+            // Set initial section indicator
+            var indicator = document.getElementById('sectionIndicator');
+            if (indicator && sections[0]) {
+                indicator.textContent = sections[0].section_name + ' (1/' + sections.length + ')';
+            }
+        }
+
+        function startTimer() {
+            updateTimerDisplay();
+            timerInterval = setInterval(function() {
+                remainingSeconds--;
+                updateTimerDisplay();
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    submitExam(true);
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            var m = Math.floor(remainingSeconds / 60);
+            var s = remainingSeconds % 60;
+            var display = document.getElementById('timerDisplay');
+            display.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+
+            var pct = (remainingSeconds / totalSeconds) * 100;
+            document.getElementById('timerProgressBar').style.width = pct + '%';
+
+            display.classList.remove('warning', 'danger');
+            if (remainingSeconds <= 60) display.classList.add('danger');
+            else if (remainingSeconds <= 300) display.classList.add('warning');
+        }
+
+        var currentSectionIdx = 0;
+
+        function renderQuestions() {
+            var html = '';
+
+            // Section tabs
+            html += '<div class="tabs" style="margin-bottom:20px">';
+            sections.forEach(function(sec, idx) {
+                html += '<button class="tab-btn' + (idx === currentSectionIdx ? ' active' : '') + '" onclick="showSection(' + idx + ')">' + sec.section_name + '</button>';
+            });
+            html += '</div>';
+
+            // Sections
+            sections.forEach(function(sec, sIdx) {
+                var secQuestions = questions.filter(function(q) { return q.section_id === sec.id; })
+                    .sort(function(a, b) { return a.sort_order - b.sort_order; });
+
+                html += '<div class="tab-content' + (sIdx === currentSectionIdx ? ' active' : '') + '" id="section-' + sIdx + '">';
+
+                if (sec.instructions) {
+                    html += '<div class="alert alert-info mb-2"><i class="fas fa-info-circle"></i> ' + sec.instructions + '</div>';
+                }
+
+                secQuestions.forEach(function(q, qIdx) {
+                    var qNum = qIdx + 1;
+                    html += '<div class="question-card" id="q-' + q.id + '">';
+                    html += '<div class="d-flex justify-between align-center">';
+                    html += '<span class="question-number">Question ' + qNum + '</span>';
+                    html += '<span class="question-marks">(' + q.marks + ' mark' + (q.marks > 1 ? 's' : '') + ')</span>';
+                    html += '</div>';
+                    html += '<p class="question-text">' + q.question_text + '</p>';
+
+                    if (q.image_url) {
+                        html += '<img src="' + q.image_url + '" style="max-width:100%;border-radius:8px;margin-bottom:12px" alt="Question image">';
+                    }
+
+                    if (q.question_type === 'mcq' && q.options) {
+                        var opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+                        html += '<div class="option-group">';
+                        opts.forEach(function(opt, oIdx) {
+                            var checked = answers[q.id] === opt ? 'checked' : '';
+                            var selected = answers[q.id] === opt ? ' selected' : '';
+                            html += '<label class="option-label' + selected + '">';
+                            html += '<input type="radio" name="q_' + q.id + '" value="' + escapeHtml(opt) + '" ' + checked + ' onchange="saveAnswer(\'' + q.id + '\', this.value)">';
+                            html += '<span>' + String.fromCharCode(65 + oIdx) + '. ' + opt + '</span>';
+                            html += '</label>';
+                        });
+                        html += '</div>';
+                    } else if (q.question_type === 'fill_blank') {
+                        var val = answers[q.id] || '';
+                        html += '<input type="text" class="form-control" placeholder="Type your answer..." value="' + escapeHtml(val) + '" onchange="saveAnswer(\'' + q.id + '\', this.value)" oninput="saveAnswer(\'' + q.id + '\', this.value)">';
+                    } else {
+                        // theory
+                        var val = answers[q.id] || '';
+                        html += '<textarea class="form-control" rows="4" placeholder="Write your answer..." onchange="saveAnswer(\'' + q.id + '\', this.value)" oninput="saveAnswer(\'' + q.id + '\', this.value)">' + escapeHtml(val) + '</textarea>';
+                    }
+
+                    html += '</div>';
+                });
+
+                html += '</div>';
+            });
+
+            // Question navigator
+            html += '<div class="card mt-3"><h3><i class="fas fa-th"></i> Question Navigator</h3>';
+            html += '<div class="d-flex flex-wrap gap-1 mt-2">';
+            var qIndex = 0;
+            sections.forEach(function(sec) {
+                var secQs = questions.filter(function(q) { return q.section_id === sec.id; });
+                secQs.forEach(function(q) {
+                    qIndex++;
+                    var answered = answers[q.id] ? ' badge-success' : '';
+                    html += '<button class="badge badge-info' + answered + '" style="width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:.85rem" onclick="scrollToQ(\'' + q.id + '\')">' + qIndex + '</button>';
+                });
+            });
+            html += '</div>';
+            var answeredCount = Object.keys(answers).filter(function(k) { return answers[k] && answers[k].toString().trim() !== ''; }).length;
+            html += '<p class="form-hint mt-1">' + answeredCount + ' of ' + questions.length + ' answered</p>';
+            html += '</div>';
+
+            // Section navigation + submit only on last section
+            var isLastSection = currentSectionIdx === sections.length - 1;
+            var isFirstSection = currentSectionIdx === 0;
+
+            html += '<div class="d-flex justify-between align-center mt-3 mb-3">';
+            if (!isFirstSection) {
+                html += '<button class="btn btn-secondary" onclick="prevSection()"><i class="fas fa-arrow-left"></i> Previous Section</button>';
+            } else {
+                html += '<div></div>';
+            }
+
+            if (isLastSection) {
+                html += '<button class="btn btn-success btn-lg" onclick="submitExam(false)" id="submitBtnBottom"><i class="fas fa-paper-plane"></i> Submit Exam</button>';
+            } else {
+                html += '<button class="btn btn-primary" onclick="nextSection()">Next Section <i class="fas fa-arrow-right"></i></button>';
+            }
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        function showSection(idx) {
+            currentSectionIdx = idx;
+            document.querySelectorAll('.tabs .tab-btn').forEach(function(b, i) {
+                b.classList.toggle('active', i === idx);
+            });
+            document.querySelectorAll('.tab-content').forEach(function(c, i) {
+                c.classList.toggle('active', i === idx);
+            });
+            // Update section indicator in timer bar
+            var indicator = document.getElementById('sectionIndicator');
+            if (indicator && sections[idx]) {
+                indicator.textContent = sections[idx].section_name + ' (' + (idx + 1) + '/' + sections.length + ')';
+            }
+            // Re-render to update nav buttons (submit only on last section)
+            renderQuestions();
+            window.scrollTo(0, 0);
+        }
+
+        function nextSection() {
+            if (currentSectionIdx < sections.length - 1) {
+                showSection(currentSectionIdx + 1);
+            }
+        }
+
+        function prevSection() {
+            if (currentSectionIdx > 0) {
+                showSection(currentSectionIdx - 1);
+            }
+        }
+
+        function scrollToQ(qId) {
+            var el = document.getElementById('q-' + qId);
+            if (el) {
+                // Find which section it's in
+                var q = questions.find(function(qq) { return qq.id === qId; });
+                if (q) {
+                    var sIdx = sections.findIndex(function(s) { return s.id === q.section_id; });
+                    if (sIdx >= 0) showSection(sIdx);
+                }
+                setTimeout(function() { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+            }
+        }
+
+        function saveAnswer(questionId, value) {
+            answers[questionId] = value;
+            // Update option label highlight
+            document.querySelectorAll('input[name="q_' + questionId + '"]').forEach(function(radio) {
+                radio.closest('.option-label').classList.toggle('selected', radio.checked);
+            });
+            // Auto-save to server every answer
+            autoSave();
+        }
+
+        var autoSaveTimer = null;
+        function autoSave() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(async function() {
+                if (!submission) return;
+                await db.from('exam_submissions')
+                    .update({ answers: answers })
+                    .eq('id', submission.id);
+            }, 2000);
+        }
+
+        async function submitExam(isAuto) {
+            if (!examStarted) return;
+            examStarted = false;
+            clearInterval(timerInterval);
+
+            if (!isAuto) {
+                var unanswered = questions.length - Object.keys(answers).filter(function(k) { return answers[k] && answers[k].toString().trim() !== ''; }).length;
+                if (unanswered > 0) {
+                    if (!confirm('You have ' + unanswered + ' unanswered question(s). Submit anyway?')) {
+                        examStarted = true;
+                        startTimer();
+                        return;
+                    }
+                }
+            }
+
+            // Show submitting state
+            document.getElementById('mainContent').innerHTML =
+                '<div class="page-loader"><div class="loader"></div><p>' + (isAuto ? 'Time is up! Auto-submitting...' : 'Submitting your exam...') + '</p></div>';
+            document.getElementById('timerBar').classList.add('hidden');
+
+            // Grade the exam
+            var totalScore = 0;
+            var sectionScores = {};
+
+            // =============================================
+            // SMART GRADING ENGINE
+            // =============================================
+
+            // Utility: normalize text (lowercase, trim, collapse whitespace, strip punctuation)
+            function normalize(str) {
+                return (str || '').toString().toLowerCase().trim()
+                    .replace(/[''`]/g, "'")
+                    .replace(/[""]/g, '"')
+                    .replace(/\s+/g, ' ');
+            }
+
+            // Utility: strip all punctuation for comparison
+            function stripPunct(str) {
+                return str.replace(/[^a-z0-9\s]/gi, '').trim();
+            }
+
+            // Utility: Levenshtein distance for typo tolerance
+            function levenshtein(a, b) {
+                if (a.length === 0) return b.length;
+                if (b.length === 0) return a.length;
+                var matrix = [];
+                for (var i = 0; i <= b.length; i++) matrix[i] = [i];
+                for (var j = 0; j <= a.length; j++) matrix[0][j] = j;
+                for (var i = 1; i <= b.length; i++) {
+                    for (var j = 1; j <= a.length; j++) {
+                        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                            matrix[i][j] = matrix[i - 1][j - 1];
+                        } else {
+                            matrix[i][j] = Math.min(
+                                matrix[i - 1][j - 1] + 1,
+                                matrix[i][j - 1] + 1,
+                                matrix[i - 1][j] + 1
+                            );
+                        }
+                    }
+                }
+                return matrix[b.length][a.length];
+            }
+
+            // Utility: similarity ratio 0..1
+            function similarity(a, b) {
+                var na = normalize(a), nb = normalize(b);
+                if (!na || !nb) return 0;
+                if (na === nb) return 1;
+                // Strip punctuation and compare
+                var sa = stripPunct(na), sb = stripPunct(nb);
+                if (sa === sb) return 1;
+                var maxLen = Math.max(sa.length, sb.length);
+                if (maxLen === 0) return 0;
+                var dist = levenshtein(sa, sb);
+                return 1 - (dist / maxLen);
+            }
+
+            // Smart MCQ grading — case-insensitive, trim, punctuation-tolerant
+            function gradeMCQ(studentAnswer, correctAnswer, marks) {
+                var sa = stripPunct(normalize(studentAnswer));
+                var ca = stripPunct(normalize(correctAnswer));
+                if (!sa || !ca) return 0;
+                if (sa === ca) return marks;
+                // Very close (typo tolerance for short answers)
+                if (similarity(studentAnswer, correctAnswer) >= 0.85) return marks;
+                return 0;
+            }
+
+            // Smart Fill-in-the-Blank grading
+            function gradeFillBlank(studentAnswer, correctAnswer, marks) {
+                var sa = normalize(studentAnswer);
+                var ca = normalize(correctAnswer);
+                if (!sa) return 0;
+                if (!ca) return sa.length >= 1 ? Math.round(marks * 0.5) : 0; // no model answer but student wrote something
+
+                // Exact match (case-insensitive)
+                if (sa === ca) return marks;
+
+                // Strip punctuation match
+                var saClean = stripPunct(sa);
+                var caClean = stripPunct(ca);
+                if (saClean === caClean) return marks;
+
+                // Check if correct answer has multiple accepted answers separated by / or |
+                var alternatives = correctAnswer.split(/[\/\|]/).map(function(alt) { return normalize(alt.trim()); });
+                for (var i = 0; i < alternatives.length; i++) {
+                    if (stripPunct(sa) === stripPunct(alternatives[i])) return marks;
+                    if (similarity(sa, alternatives[i]) >= 0.85) return marks;
+                }
+
+                // Similarity-based scoring
+                var sim = similarity(studentAnswer, correctAnswer);
+                if (sim >= 0.85) return marks;           // Very close (1-2 char typo)
+                if (sim >= 0.70) return Math.round(marks * 0.75); // Close enough (partial credit)
+                if (sim >= 0.55) return Math.round(marks * 0.5);  // Somewhat close
+
+                // Check if student's answer contains the correct answer or vice versa
+                if (saClean.indexOf(caClean) !== -1 || caClean.indexOf(saClean) !== -1) {
+                    return Math.round(marks * 0.75);
+                }
+
+                return 0;
+            }
+
+            // Smart Theory grading — keyword/phrase matching
+            function gradeTheory(studentAnswer, correctAnswer, marks) {
+                var sa = normalize(studentAnswer);
+                if (!sa || sa.length < 2) return 0;
+
+                // No model answer provided — give marks for effort based on length
+                if (!correctAnswer || normalize(correctAnswer).length < 2) {
+                    if (sa.length >= 100) return Math.round(marks * 0.7);
+                    if (sa.length >= 50) return Math.round(marks * 0.6);
+                    if (sa.length >= 20) return Math.round(marks * 0.5);
+                    if (sa.length >= 5) return Math.round(marks * 0.3);
+                    return 0;
+                }
+
+                var ca = normalize(correctAnswer);
+
+                // Extract keywords from correct answer (words with 3+ chars, skip common stop words)
+                var stopWords = ['the','and','for','are','but','not','you','all','any','can','her','was','one','our','out','has','had','how','its','may','who','did','get','let','say','she','too','use','way','than','them','then','this','that','what','when','will','with','been','from','have','each','make','like','long','look','many','some','into','over','such','take','come','could','only','just','also','about','would','still','after','being','where','their','there','these','those','which','while','should','through','really','because','before','other','every','very','much','most','more','well'];
+                var caWords = ca.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(function(w) {
+                    return w.length >= 3 && stopWords.indexOf(w) === -1;
+                });
+
+                // Remove duplicate keywords
+                var keywords = [];
+                caWords.forEach(function(w) { if (keywords.indexOf(w) === -1) keywords.push(w); });
+
+                if (keywords.length === 0) {
+                    // No meaningful keywords — check overall similarity
+                    var sim = similarity(studentAnswer, correctAnswer);
+                    return Math.round(marks * Math.min(sim * 1.2, 1));
+                }
+
+                // Check how many keywords appear in student's answer (fuzzy match each)
+                var saClean = sa.replace(/[^a-z0-9\s]/g, '');
+                var matchedKeywords = 0;
+                keywords.forEach(function(kw) {
+                    // Direct containment
+                    if (saClean.indexOf(kw) !== -1) {
+                        matchedKeywords++;
+                        return;
+                    }
+                    // Fuzzy: check each student word for closeness to this keyword
+                    var studentWords = saClean.split(/\s+/);
+                    for (var i = 0; i < studentWords.length; i++) {
+                        if (similarity(studentWords[i], kw) >= 0.75) {
+                            matchedKeywords++;
+                            return;
+                        }
+                    }
+                });
+
+                var keywordRatio = matchedKeywords / keywords.length;
+
+                // Also factor in answer length relative to expected
+                var lengthRatio = Math.min(sa.length / Math.max(ca.length * 0.5, 1), 1);
+
+                // Combined score: 80% keyword matching + 20% length adequacy
+                var rawScore = (keywordRatio * 0.8) + (lengthRatio * 0.2);
+
+                // Apply a slight boost (up to 10%) to be generous
+                rawScore = Math.min(rawScore * 1.1, 1);
+
+                return Math.round(marks * rawScore);
+            }
+
+            // ---- Grade all questions ----
+            sections.forEach(function(sec) {
+                var secScore = 0;
+                var secQuestions = questions.filter(function(q) { return q.section_id === sec.id; });
+
+                secQuestions.forEach(function(q) {
+                    var studentAnswer = (answers[q.id] || '').toString().trim();
+                    var correctAnswer = (q.correct_answer || '').toString().trim();
+
+                    if (q.question_type === 'mcq') {
+                        secScore += gradeMCQ(studentAnswer, correctAnswer, q.marks);
+                    } else if (q.question_type === 'fill_blank') {
+                        secScore += gradeFillBlank(studentAnswer, correctAnswer, q.marks);
+                    } else {
+                        secScore += gradeTheory(studentAnswer, correctAnswer, q.marks);
+                    }
+                });
+
+                sectionScores[sec.section_name] = secScore;
+                totalScore += secScore;
+            });
+
+            var percentage = exam.total_marks > 0 ? Math.round((totalScore / exam.total_marks) * 100) : 0;
+            var gradeLetter = getGradeLetter(percentage);
+
+            // Save submission
+            var { error } = await db.from('exam_submissions')
+                .update({
+                    answers: answers,
+                    submitted_at: new Date().toISOString(),
+                    is_auto_submitted: isAuto,
+                    total_score: totalScore,
+                    max_score: exam.total_marks,
+                    percentage: percentage,
+                    grade_letter: gradeLetter,
+                    section_scores: sectionScores
+                })
+                .eq('id', submission.id);
+
+            if (error) {
+                showToast('Error saving results: ' + error.message, 'error');
+            }
+
+            showResults(totalScore, percentage, gradeLetter, sectionScores, isAuto);
+        }
+
+        function showResults(totalScore, percentage, gradeLetter, sectionScores, isAuto) {
+            var gc = getGradeClass(gradeLetter);
+            var html = '';
+            html += '<div class="text-center mb-3">';
+            if (isAuto) html += '<div class="alert alert-warning"><i class="fas fa-clock"></i> Time expired! Your exam was auto-submitted.</div>';
+            html += '<i class="fas fa-trophy" style="font-size:4rem;color:#ffc107"></i>';
+            html += '<h1 class="mt-2">Exam Completed!</h1>';
+            html += '<p class="subtitle">' + exam.title + '</p>';
+            html += '</div>';
+
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + totalScore + '/' + exam.total_marks + '</span><span class="stat-label">Total Score</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + percentage + '%</span><span class="stat-label">Percentage</span></div>';
+            html += '<div class="stat-card"><span class="stat-number"><span class="grade-badge ' + gc + '" style="font-size:1.8rem;padding:8px 20px">' + gradeLetter + '</span></span><span class="stat-label">Grade</span></div>';
+            html += '</div>';
+
+            // Section breakdown
+            html += '<div class="card mb-3"><h3><i class="fas fa-chart-pie"></i> Section Breakdown</h3>';
+            html += '<table class="report-table mt-2"><thead><tr><th>Section</th><th>Score</th><th>Max</th></tr></thead><tbody>';
+            sections.forEach(function(sec) {
+                html += '<tr><td>' + sec.section_name + '</td><td><strong>' + (sectionScores[sec.section_name] || 0) + '</strong></td><td>' + sec.max_marks + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+
+            html += '<div class="btn-group justify-center mt-3">';
+            html += '<a href="/student-report.html?submission=' + submission.id + '" class="btn btn-info"><i class="fas fa-file-alt"></i> View Full Report</a>';
+            html += '<a href="/student-dashboard.html" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>';
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Prevent accidental navigation
+        window.addEventListener('beforeunload', function(e) {
+            if (examStarted) {
+                e.preventDefault();
+                e.returnValue = 'You have an exam in progress. Are you sure you want to leave?';
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>

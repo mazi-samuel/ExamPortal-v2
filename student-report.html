@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Report - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-md" id="mainContent">
+            <div class="page-loader"><div class="loader"></div><p>Loading report...</p></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+
+        async function init() {
+            profile = await requireAuth(['student', 'teacher']);
+            if (!profile) return;
+            renderNav(profile);
+
+            var params = new URLSearchParams(window.location.search);
+            var submissionId = params.get('submission');
+            if (!submissionId) {
+                document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>No submission specified</h3></div>';
+                return;
+            }
+
+            await loadReport(submissionId);
+        }
+
+        async function loadReport(submissionId) {
+            // Load submission with related data
+            var { data: sub, error } = await db
+                .from('exam_submissions')
+                .select('*, profiles!exam_submissions_student_id_fkey(full_name, class, school_id, date_of_birth, gender, parent_name, schools(name)), exams(title, class, total_marks, duration_minutes, exam_date, subjects(name), created_by)')
+                .eq('id', submissionId)
+                .single();
+
+            if (error || !sub) {
+                document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-circle"></i><h3>Report not found</h3></div>';
+                return;
+            }
+
+            // Load sections for the exam
+            var { data: sections } = await db.from('exam_sections').select('*').eq('exam_id', sub.exam_id).order('sort_order');
+            sections = sections || [];
+
+            // Load questions
+            var { data: questions } = await db.from('questions').select('*').eq('exam_id', sub.exam_id).order('sort_order');
+            questions = questions || [];
+
+            // Load teacher signature
+            var teacherId = sub.exams ? sub.exams.created_by : null;
+            var signatureUrl = null;
+            if (teacherId) {
+                var { data: sig } = await db.from('teacher_signatures').select('signature_url').eq('teacher_id', teacherId).maybeSingle();
+                if (sig) signatureUrl = sig.signature_url;
+            }
+
+            // Load teacher name
+            var teacherName = '';
+            if (teacherId) {
+                var { data: teacherProfile } = await db.from('profiles').select('full_name').eq('id', teacherId).maybeSingle();
+                if (teacherProfile) teacherName = teacherProfile.full_name;
+            }
+
+            renderReport(sub, sections, questions, signatureUrl, teacherName);
+        }
+
+        function renderReport(sub, sections, questions, signatureUrl, teacherName) {
+            var student = sub.profiles || {};
+            var exam = sub.exams || {};
+            var school = student.schools || {};
+            var subject = exam.subjects || {};
+            var sectionScores = sub.section_scores || {};
+            var answers = sub.answers || {};
+            var gc = getGradeClass(sub.grade_letter);
+
+            var html = '';
+
+            // Print / Back buttons
+            html += '<div class="d-flex justify-between mb-3 no-print">';
+            html += '<button class="btn btn-secondary btn-sm" onclick="history.back()"><i class="fas fa-arrow-left"></i> Back</button>';
+            html += '<button class="btn btn-primary btn-sm" onclick="window.print()"><i class="fas fa-print"></i> Print Report</button>';
+            html += '</div>';
+
+            // Report Card
+            html += '<div class="report-card">';
+
+            // Header
+            html += '<div class="report-header">';
+            html += '<h1 style="font-size:1.6rem;margin-bottom:4px">' + (school.name || 'School') + '</h1>';
+            html += '<p style="opacity:.9">Student Examination Report Card</p>';
+            html += '<p style="opacity:.7;font-size:.85rem">Academic Session 2025/2026</p>';
+            html += '</div>';
+
+            // Body
+            html += '<div class="report-body">';
+
+            // Student info
+            html += '<table class="report-table">';
+            html += '<tr><th style="width:160px">Student Name</th><td><strong>' + student.full_name + '</strong></td>';
+            html += '<th style="width:100px">Class</th><td>' + getClassLabel(student.class) + '</td></tr>';
+            html += '<tr><th>Subject</th><td>' + (subject.name || '-') + '</td>';
+            html += '<th>Exam</th><td>' + (exam.title || '-') + '</td></tr>';
+            html += '<tr><th>Exam Date</th><td>' + formatDate(exam.exam_date) + '</td>';
+            html += '<th>Submitted</th><td>' + formatDate(sub.submitted_at) + (sub.is_auto_submitted ? ' <em style="color:#f44336">(auto)</em>' : '') + '</td></tr>';
+            html += '</table>';
+
+            // Score summary
+            html += '<div style="display:flex;justify-content:center;gap:30px;margin:24px 0;flex-wrap:wrap">';
+            html += '<div style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:#4a47a3">' + (sub.total_score || 0) + '<span style="font-size:1.2rem;color:#999">/' + (sub.max_score || 0) + '</span></div><div style="color:#666">Total Score</div></div>';
+            html += '<div style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:#667eea">' + Math.round(sub.percentage || 0) + '%</div><div style="color:#666">Percentage</div></div>';
+            html += '<div style="text-align:center"><div style="font-size:2.5rem"><span class="grade-badge ' + gc + '" style="font-size:2rem;padding:10px 24px">' + (sub.grade_letter || '-') + '</span></div><div style="color:#666;margin-top:4px">Grade</div></div>';
+            html += '</div>';
+
+            // Section breakdown
+            html += '<h3 style="margin-top:20px"><i class="fas fa-chart-pie"></i> Section Breakdown</h3>';
+            html += '<table class="report-table mt-2">';
+            html += '<thead><tr><th>Section</th><th>Type</th><th>Score</th><th>Max Marks</th><th>%</th></tr></thead>';
+            html += '<tbody>';
+            sections.forEach(function(sec) {
+                var secScore = sectionScores[sec.section_name] || 0;
+                var secPct = sec.max_marks > 0 ? Math.round((secScore / sec.max_marks) * 100) : 0;
+                var typeLabel = sec.section_type === 'mcq' ? 'MCQ' : sec.section_type === 'fill_blank' ? 'Fill Blank' : 'Theory';
+                html += '<tr>';
+                html += '<td>' + sec.section_name + '</td>';
+                html += '<td>' + typeLabel + '</td>';
+                html += '<td><strong>' + secScore + '</strong></td>';
+                html += '<td>' + sec.max_marks + '</td>';
+                html += '<td>' + secPct + '%</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+
+            // Performance bar
+            var pct = Math.round(sub.percentage || 0);
+            var barColor = pct >= 70 ? '#4caf50' : pct >= 50 ? '#ff9800' : '#f44336';
+            html += '<div style="margin:20px 0">';
+            html += '<p style="font-weight:700;margin-bottom:6px">Overall Performance</p>';
+            html += '<div style="background:#e0e0e0;border-radius:10px;height:24px;overflow:hidden">';
+            html += '<div style="background:' + barColor + ';height:100%;width:' + pct + '%;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.85rem;min-width:40px">' + pct + '%</div>';
+            html += '</div></div>';
+
+            // Remark
+            var remark = '';
+            if (pct >= 90) remark = 'Outstanding performance! Keep up the excellent work! 🌟';
+            else if (pct >= 80) remark = 'Very good performance! Well done! 👏';
+            else if (pct >= 70) remark = 'Good performance. Keep pushing for more! 💪';
+            else if (pct >= 60) remark = 'Fair performance. You can do better with more practice. 📚';
+            else if (pct >= 50) remark = 'Average performance. More effort is needed. 📖';
+            else remark = 'Below average. Please seek extra help and study harder. 🔔';
+
+            html += '<div class="alert ' + (pct >= 50 ? 'alert-success' : 'alert-warning') + '" style="margin-top:16px">';
+            html += '<strong>Teacher\'s Remark:</strong> ' + remark;
+            html += '</div>';
+
+            html += '</div>'; // end report-body
+
+            // Footer with signatures
+            html += '<div class="report-footer">';
+            html += '<div class="report-signatures">';
+
+            // Teacher signature
+            html += '<div class="report-sig-block">';
+            if (signatureUrl) {
+                html += '<img src="' + signatureUrl + '" alt="Teacher Signature">';
+            } else {
+                html += '<div style="height:50px"></div>';
+            }
+            html += '<div class="report-sig-line">' + (teacherName || 'Class Teacher') + '</div>';
+            html += '<p style="font-size:.8rem;color:#999">Class Teacher\'s Signature</p>';
+            html += '</div>';
+
+            // Head teacher placeholder
+            html += '<div class="report-sig-block">';
+            html += '<div style="height:50px"></div>';
+            html += '<div class="report-sig-line">&nbsp;</div>';
+            html += '<p style="font-size:.8rem;color:#999">Head Teacher\'s Signature</p>';
+            html += '</div>';
+
+            // Date
+            html += '<div class="report-sig-block">';
+            html += '<div style="height:50px"></div>';
+            html += '<div class="report-sig-line">' + new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}) + '</div>';
+            html += '<p style="font-size:.8rem;color:#999">Date</p>';
+            html += '</div>';
+
+            html += '</div>'; // report-signatures
+            html += '</div>'; // report-footer
+            html += '</div>'; // report-card
+
+            // Question-by-question breakdown (collapsible, no-print)
+            html += '<div class="card mt-3 no-print">';
+            html += '<h3 style="cursor:pointer" onclick="document.getElementById(\'detailBreakdown\').classList.toggle(\'hidden\')"><i class="fas fa-search-plus"></i> Detailed Answer Breakdown <small style="color:#999">(click to toggle)</small></h3>';
+            html += '<div id="detailBreakdown" class="hidden mt-2">';
+
+            sections.forEach(function(sec) {
+                html += '<h4 class="mt-2" style="color:#667eea">' + sec.section_name + '</h4>';
+                var secQs = questions.filter(function(q) { return q.section_id === sec.id; });
+                secQs.forEach(function(q, i) {
+                    var studentAns = answers[q.id] || '<em>Not answered</em>';
+                    var correctAns = q.correct_answer || '-';
+                    var isCorrect = false;
+                    if (q.question_type !== 'theory') {
+                        isCorrect = (studentAns || '').toString().trim().toLowerCase() === (correctAns || '').toString().trim().toLowerCase();
+                    }
+                    var icon = q.question_type === 'theory' ? '📝' : (isCorrect ? '✅' : '❌');
+
+                    html += '<div style="padding:8px;border-bottom:1px solid #eee;font-size:.9rem">';
+                    html += '<strong>Q' + (i + 1) + '.</strong> ' + q.question_text.substring(0, 200);
+                    html += '<br><span style="color:#667eea">Your answer:</span> ' + studentAns;
+                    if (q.question_type !== 'theory') {
+                        html += ' &nbsp;' + icon;
+                        html += '<br><span style="color:#4caf50">Correct:</span> ' + correctAns;
+                    }
+                    html += '</div>';
+                });
+            });
+
+            html += '</div></div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading dashboard...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subject Modal -->
+    <div class="modal-overlay" id="subjectModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="subjectModalTitle">Create Subject</h2>
+                <button class="modal-close" onclick="closeSubjectModal()">&times;</button>
+            </div>
+            <form onsubmit="saveSubject(event)">
+                <input type="hidden" id="subjectId">
+                <div class="form-group">
+                    <label>Subject Name *</label>
+                    <input type="text" id="subjectName" class="form-control" placeholder="e.g. ICT, Mathematics" required>
+                </div>
+                <div class="form-group">
+                    <label>Class *</label>
+                    <select id="subjectClass" class="form-control" required>
+                        <option value="">-- Select Class --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="subjectDesc" class="form-control" placeholder="Brief description (optional)">
+                </div>
+                <div class="form-group">
+                    <label>Icon (Font Awesome class)</label>
+                    <input type="text" id="subjectIcon" class="form-control" value="fas fa-book" placeholder="fas fa-book">
+                    <span class="form-hint">e.g. fas fa-laptop, fas fa-calculator, fas fa-flask</span>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" id="saveSubjectBtn">
+                    <i class="fas fa-save"></i> Save Subject
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var subjects = [];
+        var exams = [];
+
+        async function init() {
+            profile = await requireAuth(['teacher']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Populate class options in modal
+            var classSel = document.getElementById('subjectClass');
+            CLASS_OPTIONS.forEach(function(c) {
+                var opt = document.createElement('option');
+                opt.value = c.value;
+                opt.textContent = c.label;
+                classSel.appendChild(opt);
+            });
+
+            await loadData();
+            renderDashboard();
+        }
+
+        async function loadData() {
+            var query = db.from('subjects').select('*').eq('school_id', profile.school_id);
+            // Subject teacher: only their subject
+            if (profile.teacher_status === 'subject_teacher' && profile.subject_taught) {
+                query = query.ilike('name', profile.subject_taught);
+            }
+            // Class teacher: only their assigned class (base grade)
+            if (profile.teacher_status === 'class_teacher' && profile.assigned_class) {
+                query = query.eq('class', profile.assigned_class);
+            }
+            // Head teacher: sees everything (no extra filter)
+            var { data: subs } = await query.order('class').order('name');
+            subjects = subs || [];
+
+            var examQuery = db.from('exams').select('*, subjects(name)').eq('school_id', profile.school_id);
+            if (profile.teacher_status === 'subject_teacher' && profile.subject_taught) {
+                var subjectIds = subjects.map(function(s){ return s.id; });
+                if (subjectIds.length > 0) examQuery = examQuery.in('subject_id', subjectIds);
+                else examQuery = examQuery.eq('subject_id', '00000000-0000-0000-0000-000000000000'); // no results
+            }
+            if (profile.teacher_status === 'class_teacher' && profile.assigned_class) {
+                examQuery = examQuery.eq('class', profile.assigned_class);
+            }
+            var { data: exs } = await examQuery.order('created_at', { ascending: false });
+            exams = exs || [];
+        }
+
+        function renderDashboard() {
+            var schoolName = profile.schools ? profile.schools.name : 'Your School';
+            var publishedExams = exams.filter(function(e) { return e.is_published; });
+            var draftExams = exams.filter(function(e) { return !e.is_published; });
+
+            var html = '';
+
+            // Header
+            var statusLabel = '';
+            if (profile.teacher_status === 'subject_teacher') statusLabel = '<span style="background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:10px;font-size:.8rem;margin-left:8px">Subject Teacher' + (profile.subject_taught ? ' — ' + profile.subject_taught : '') + '</span>';
+            else if (profile.teacher_status === 'class_teacher') statusLabel = '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 10px;border-radius:10px;font-size:.8rem;margin-left:8px">Class Teacher' + (profile.assigned_class ? ' — ' + getClassWithSection(profile.assigned_class, profile.assigned_class_section) : '') + '</span>';
+            else if (profile.teacher_status === 'head_teacher') statusLabel = '<span style="background:#fff3e0;color:#e65100;padding:2px 10px;border-radius:10px;font-size:.8rem;margin-left:8px">Head Teacher</span>';
+
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-chalkboard-teacher"></i> Teacher Dashboard</h1>';
+            html += '<p class="subtitle">' + schoolName + ' &bull; ' + profile.full_name + statusLabel + '</p></div>';
+            html += '<div class="btn-group">';
+            html += '<a href="/exam-builder.html" class="btn btn-success"><i class="fas fa-plus-circle"></i> Create Exam</a>';
+            html += '<button class="btn btn-primary" onclick="openSubjectModal()"><i class="fas fa-plus"></i> New Subject</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Stats
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + subjects.length + '</span><span class="stat-label">Subjects</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + exams.length + '</span><span class="stat-label">Total Exams</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + publishedExams.length + '</span><span class="stat-label">Published</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + draftExams.length + '</span><span class="stat-label">Drafts</span></div>';
+            html += '</div>';
+
+            // Tabs
+            html += '<div class="tabs">';
+            html += '<button class="tab-btn active" onclick="switchTab(\'subjects\')"><i class="fas fa-book"></i> Subjects</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'exams\')"><i class="fas fa-file-alt"></i> Exams</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'recent\')"><i class="fas fa-clock"></i> Recent</button>';
+            html += '</div>';
+
+            // Subjects tab
+            html += '<div class="tab-content active" id="tab-subjects">';
+            if (subjects.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-book-open"></i><h3>No subjects yet</h3><p>Create your first subject to start building exams.</p>';
+                html += '<button class="btn btn-primary mt-2" onclick="openSubjectModal()"><i class="fas fa-plus"></i> Create Subject</button></div>';
+            } else {
+                html += '<div class="grid grid-3">';
+                subjects.forEach(function(s) {
+                    html += '<div class="card">';
+                    html += '<div class="d-flex align-center gap-2 mb-2">';
+                    html += '<i class="' + (s.icon || 'fas fa-book') + '" style="font-size:1.6rem;color:#667eea"></i>';
+                    html += '<div><h3 style="margin:0">' + s.name + '</h3>';
+                    html += '<span class="text-muted" style="font-size:.85rem">' + getClassLabel(s.class) + '</span></div>';
+                    html += '</div>';
+                    if (s.description) html += '<p style="color:#666;font-size:.9rem">' + s.description + '</p>';
+                    var subExams = exams.filter(function(e) { return e.subject_id === s.id; });
+                    html += '<p style="font-size:.85rem;color:#999;margin-top:8px">' + subExams.length + ' exam(s)</p>';
+                    html += '<div class="d-flex gap-1 mt-2">';
+                    html += '<button class="btn btn-sm btn-info" onclick="editSubject(\'' + s.id + '\')"><i class="fas fa-edit"></i></button>';
+                    html += '<button class="btn btn-sm btn-danger" onclick="deleteSubject(\'' + s.id + '\')"><i class="fas fa-trash"></i></button>';
+                    html += '<a href="/exam-builder.html?subject=' + s.id + '" class="btn btn-sm btn-success"><i class="fas fa-plus"></i> Exam</a>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Exams tab
+            html += '<div class="tab-content" id="tab-exams">';
+            if (exams.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>No exams yet</h3><p>Create a subject first, then build an exam.</p></div>';
+            } else {
+                html += '<div class="table-wrap"><table><thead><tr>';
+                html += '<th>S/N</th><th>Title</th><th>Subject</th><th>Class</th><th>Date</th><th>Duration</th><th>Status</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+                exams.forEach(function(e, i) {
+                    var status = e.is_published
+                        ? '<span class="badge badge-success">Published</span>'
+                        : '<span class="badge badge-warning">Draft</span>';
+                    html += '<tr>';
+                    html += '<td>' + (i + 1) + '</td>';
+                    html += '<td>' + e.title + '</td>';
+                    html += '<td>' + (e.subjects ? e.subjects.name : '-') + '</td>';
+                    html += '<td>' + getClassLabel(e.class) + '</td>';
+                    html += '<td>' + (e.exam_date ? formatDate(e.exam_date) : '-') + '</td>';
+                    html += '<td>' + e.duration_minutes + ' min</td>';
+                    html += '<td>' + status + '</td>';
+                    html += '<td>';
+                    html += '<div class="d-flex gap-1 justify-center">';
+                    html += '<a href="/exam-builder.html?edit=' + e.id + '" class="btn btn-sm btn-info" title="Edit"><i class="fas fa-edit"></i></a>';
+                    if (!e.is_published) {
+                        html += '<button class="btn btn-sm btn-success" onclick="togglePublish(\'' + e.id + '\', true)" title="Publish"><i class="fas fa-globe"></i></button>';
+                    } else {
+                        html += '<button class="btn btn-sm btn-warning" onclick="togglePublish(\'' + e.id + '\', false)" title="Unpublish"><i class="fas fa-eye-slash"></i></button>';
+                    }
+                    html += '<button class="btn btn-sm btn-danger" onclick="deleteExam(\'' + e.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
+                    html += '</div>';
+                    html += '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+
+            // Recent tab
+            html += '<div class="tab-content" id="tab-recent">';
+            html += '<div class="card"><h3><i class="fas fa-bolt"></i> Quick Links</h3>';
+            html += '<div class="grid grid-2 mt-2">';
+            html += '<a href="/teacher-scoresheet.html" class="card" style="text-decoration:none"><i class="fas fa-chart-bar" style="font-size:2rem;color:#667eea"></i><h3 class="mt-1">Score Sheet</h3><p class="text-muted">View all student submissions</p></a>';
+            html += '<a href="/teacher-profile.html" class="card" style="text-decoration:none"><i class="fas fa-signature" style="font-size:2rem;color:#667eea"></i><h3 class="mt-1">Upload Signature</h3><p class="text-muted">Add your digital signature for reports</p></a>';
+            html += '</div></div>';
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        function switchTab(tab) {
+            var tabs = ['subjects', 'exams', 'recent'];
+            document.querySelectorAll('.tab-btn').forEach(function(b, i) {
+                b.classList.toggle('active', tabs[i] === tab);
+            });
+            tabs.forEach(function(t) {
+                var el = document.getElementById('tab-' + t);
+                if (el) el.classList.toggle('active', t === tab);
+            });
+        }
+
+        // Subject CRUD
+        function openSubjectModal(data) {
+            document.getElementById('subjectModal').classList.add('open');
+            if (data) {
+                document.getElementById('subjectModalTitle').textContent = 'Edit Subject';
+                document.getElementById('subjectId').value = data.id;
+                document.getElementById('subjectName').value = data.name;
+                document.getElementById('subjectClass').value = data.class;
+                document.getElementById('subjectDesc').value = data.description || '';
+                document.getElementById('subjectIcon').value = data.icon || 'fas fa-book';
+            } else {
+                document.getElementById('subjectModalTitle').textContent = 'Create Subject';
+                document.getElementById('subjectId').value = '';
+                document.getElementById('subjectName').value = '';
+                document.getElementById('subjectClass').value = '';
+                document.getElementById('subjectDesc').value = '';
+                document.getElementById('subjectIcon').value = 'fas fa-book';
+            }
+        }
+
+        function closeSubjectModal() {
+            document.getElementById('subjectModal').classList.remove('open');
+        }
+
+        function editSubject(id) {
+            var s = subjects.find(function(x) { return x.id === id; });
+            if (s) openSubjectModal(s);
+        }
+
+        async function saveSubject(e) {
+            e.preventDefault();
+            var id = document.getElementById('subjectId').value;
+            var payload = {
+                name: document.getElementById('subjectName').value.trim(),
+                class: document.getElementById('subjectClass').value,
+                description: document.getElementById('subjectDesc').value.trim(),
+                icon: document.getElementById('subjectIcon').value.trim(),
+                school_id: profile.school_id,
+                teacher_id: profile.id
+            };
+
+            try {
+                if (id) {
+                    var { error } = await db.from('subjects').update(payload).eq('id', id);
+                    if (error) throw error;
+                    showToast('Subject updated!', 'success');
+                } else {
+                    var { error } = await db.from('subjects').insert(payload);
+                    if (error) throw error;
+                    showToast('Subject created!', 'success');
+                }
+                closeSubjectModal();
+                await loadData();
+                renderDashboard();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteSubject(id) {
+            if (!confirm('Delete this subject? All exams under it will also be deleted.')) return;
+            var { error } = await db.from('subjects').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Subject deleted', 'success');
+            await loadData();
+            renderDashboard();
+        }
+
+        async function togglePublish(examId, publish) {
+            var { error } = await db.from('exams').update({ is_published: publish }).eq('id', examId);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast(publish ? 'Exam published! Students can now see it.' : 'Exam unpublished.', 'success');
+            await loadData();
+            renderDashboard();
+            switchTab('exams');
+        }
+
+        async function deleteExam(id) {
+            if (!confirm('Delete this exam and all its questions? This cannot be undone.')) return;
+            var { error } = await db.from('exams').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Exam deleted', 'success');
+            await loadData();
+            renderDashboard();
+            switchTab('exams');
+        }
+
+        init();
+    </script>
+</body>
+</html>
