@@ -34,32 +34,36 @@ BEGIN
   -- Try to find Mr Mazi's profile (may not exist yet)
   SELECT id INTO v_teacher_id FROM profiles WHERE full_name ILIKE '%Mazi%' AND school_id = v_school_id LIMIT 1;
 
+  -- Clean up any previously seeded ICT Mid-Term exams (safe to re-run)
+  DELETE FROM exams WHERE school_id = v_school_id AND title LIKE 'ICT Mid-Term Examination - Grade %';
+
   -- =============================================
-  -- CREATE ICT SUBJECTS FOR EACH GRADE
+  -- UPSERT ICT SUBJECTS FOR EACH GRADE
+  -- (Re-uses existing rows if already created)
   -- =============================================
   INSERT INTO subjects (id, name, school_id, class, teacher_id, description, icon)
-  VALUES
-    (uuid_generate_v4(), 'ICT', v_school_id, 'grade1', v_teacher_id, 'Information and Communication Technology - Grade 1', 'fas fa-laptop')
+  VALUES (uuid_generate_v4(), 'ICT', v_school_id, 'grade1', v_teacher_id, 'Information and Communication Technology - Grade 1', 'fas fa-laptop')
+  ON CONFLICT (name, school_id, class) DO UPDATE SET teacher_id = COALESCE(EXCLUDED.teacher_id, subjects.teacher_id)
   RETURNING id INTO v_ict1_id;
 
   INSERT INTO subjects (id, name, school_id, class, teacher_id, description, icon)
-  VALUES
-    (uuid_generate_v4(), 'ICT', v_school_id, 'grade2', v_teacher_id, 'Information and Communication Technology - Grade 2', 'fas fa-laptop')
+  VALUES (uuid_generate_v4(), 'ICT', v_school_id, 'grade2', v_teacher_id, 'Information and Communication Technology - Grade 2', 'fas fa-laptop')
+  ON CONFLICT (name, school_id, class) DO UPDATE SET teacher_id = COALESCE(EXCLUDED.teacher_id, subjects.teacher_id)
   RETURNING id INTO v_ict2_id;
 
   INSERT INTO subjects (id, name, school_id, class, teacher_id, description, icon)
-  VALUES
-    (uuid_generate_v4(), 'ICT', v_school_id, 'grade3', v_teacher_id, 'Information and Communication Technology - Grade 3', 'fas fa-laptop')
+  VALUES (uuid_generate_v4(), 'ICT', v_school_id, 'grade3', v_teacher_id, 'Information and Communication Technology - Grade 3', 'fas fa-laptop')
+  ON CONFLICT (name, school_id, class) DO UPDATE SET teacher_id = COALESCE(EXCLUDED.teacher_id, subjects.teacher_id)
   RETURNING id INTO v_ict3_id;
 
   INSERT INTO subjects (id, name, school_id, class, teacher_id, description, icon)
-  VALUES
-    (uuid_generate_v4(), 'ICT', v_school_id, 'grade4', v_teacher_id, 'Information and Communication Technology - Grade 4', 'fas fa-laptop')
+  VALUES (uuid_generate_v4(), 'ICT', v_school_id, 'grade4', v_teacher_id, 'Information and Communication Technology - Grade 4', 'fas fa-laptop')
+  ON CONFLICT (name, school_id, class) DO UPDATE SET teacher_id = COALESCE(EXCLUDED.teacher_id, subjects.teacher_id)
   RETURNING id INTO v_ict4_id;
 
   INSERT INTO subjects (id, name, school_id, class, teacher_id, description, icon)
-  VALUES
-    (uuid_generate_v4(), 'ICT', v_school_id, 'grade5', v_teacher_id, 'Information and Communication Technology - Grade 5', 'fas fa-laptop')
+  VALUES (uuid_generate_v4(), 'ICT', v_school_id, 'grade5', v_teacher_id, 'Information and Communication Technology - Grade 5', 'fas fa-laptop')
+  ON CONFLICT (name, school_id, class) DO UPDATE SET teacher_id = COALESCE(EXCLUDED.teacher_id, subjects.teacher_id)
   RETURNING id INTO v_ict5_id;
 
   -- =============================================
