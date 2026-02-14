@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav">
+        <div class="nav-inner">
+            <a href="/portal-index.html" class="nav-brand"><i class="fas fa-graduation-cap"></i> ExamPortal</a>
+            <div class="nav-user">
+                <a href="/signup.html" class="btn btn-sm btn-success"><i class="fas fa-user-plus"></i> Sign Up</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="page-wrap d-flex justify-center align-center" style="min-height:calc(100vh - 60px)">
+        <div class="container container-sm text-center">
+            <h1><i class="fas fa-lock"></i> Welcome Back!</h1>
+            <p class="subtitle mb-3">Login to your ExamPortal account</p>
+
+            <!-- Role toggle -->
+            <div class="tabs justify-center mb-3" style="border:none;">
+                <button class="tab-btn active" id="tabStudent" onclick="setRole('student')">
+                    <i class="fas fa-child"></i> Student
+                </button>
+                <button class="tab-btn" id="tabTeacher" onclick="setRole('teacher')">
+                    <i class="fas fa-chalkboard-teacher"></i> Teacher
+                </button>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <!-- Student: username, Teacher: email -->
+                <div class="form-group" id="usernameGroup">
+                    <label><i class="fas fa-user"></i> Username</label>
+                    <input type="text" id="username" class="form-control" placeholder="Enter your username" autocomplete="username">
+                </div>
+                <div class="form-group hidden" id="emailGroup">
+                    <label><i class="fas fa-envelope"></i> Email Address</label>
+                    <input type="email" id="email" class="form-control" placeholder="teacher@school.com" autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-key"></i> Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password" autocomplete="current-password">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg mt-2" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+            </form>
+
+            <p class="mt-3" style="color:#666">
+                Don't have an account? <a href="/signup.html" style="color:#667eea;font-weight:700">Sign Up</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        let currentRole = 'student';
+
+        function setRole(role) {
+            currentRole = role;
+            document.getElementById('tabStudent').classList.toggle('active', role === 'student');
+            document.getElementById('tabTeacher').classList.toggle('active', role === 'teacher');
+            document.getElementById('usernameGroup').classList.toggle('hidden', role !== 'student');
+            document.getElementById('emailGroup').classList.toggle('hidden', role !== 'teacher');
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            var btn = document.getElementById('loginBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:3px"></span> Logging in...';
+
+            try {
+                var email;
+                if (currentRole === 'student') {
+                    var uname = document.getElementById('username').value.trim();
+                    if (!uname) throw new Error('Please enter your username');
+                    email = usernameToEmail(uname);
+                } else {
+                    email = document.getElementById('email').value.trim();
+                    if (!email) throw new Error('Please enter your email');
+                }
+
+                var password = document.getElementById('password').value;
+                if (!password) throw new Error('Please enter your password');
+
+                var { data, error } = await db.auth.signInWithPassword({ email: email, password: password });
+                if (error) throw error;
+
+                // Fetch profile to redirect
+                var { data: profile } = await db.from('profiles').select('role').eq('id', data.user.id).single();
+                showToast('Login successful!', 'success');
+
+                setTimeout(function() {
+                    if (profile && profile.role === 'teacher') {
+                        window.location.href = '/teacher-dashboard.html';
+                    } else {
+                        window.location.href = '/student-dashboard.html';
+                    }
+                }, 500);
+            } catch (err) {
+                showToast(err.message || 'Login failed', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+            }
+        }
+
+        // Check URL params for role pre-selection
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('role') === 'teacher') setRole('teacher');
+
+        // Redirect if already logged in
+        (async function() {
+            var profile = await getCurrentProfile();
+            if (profile) {
+                window.location.href = profile.role === 'teacher' ? '/teacher-dashboard.html' : '/student-dashboard.html';
+            }
+        })();
+    </script>
+</body>
+</html>
