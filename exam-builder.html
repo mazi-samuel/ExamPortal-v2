@@ -226,8 +226,8 @@
                     html += '<div class="section-builder">';
                     html += '<div class="section-builder-header">';
                     html += '<div>';
-                    html += '<input type="text" class="form-control" value="' + escapeAttr(sec.section_name) + '" onchange="updateSection(' + sIdx + ', \'section_name\', this.value)" style="font-weight:700;font-size:1.1rem;width:auto;display:inline-block">';
-                    html += ' <select class="form-control" onchange="updateSection(' + sIdx + ', \'section_type\', this.value)" style="width:auto;display:inline-block">';
+                    html += '<input type="text" class="form-control" value="' + escapeAttr(sec.section_name) + '" onchange="updateSection(' + sIdx + ', \'section_name\', this.value)" style="font-weight:700;font-size:1.1rem;width:100%;max-width:250px;display:inline-block">';
+                    html += ' <select class="form-control" onchange="updateSection(' + sIdx + ', \'section_type\', this.value)" style="width:100%;max-width:180px;display:inline-block">';
                     html += '<option value="mcq"' + (sec.section_type === 'mcq' ? ' selected' : '') + '>MCQ</option>';
                     html += '<option value="fill_blank"' + (sec.section_type === 'fill_blank' ? ' selected' : '') + '>Fill in the Blank</option>';
                     html += '<option value="theory"' + (sec.section_type === 'theory' ? ' selected' : '') + '>Theory</option>';
@@ -262,7 +262,7 @@
 
                         if (sec.section_type === 'mcq') {
                             var opts = q.options || ['', '', '', ''];
-                            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+                            html += '<div class="mcq-options-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:8px">';
                             for (var oi = 0; oi < 4; oi++) {
                                 html += '<input type="text" class="form-control" placeholder="Option ' + String.fromCharCode(65 + oi) + '" value="' + escapeAttr(opts[oi] || '') + '" onchange="updateOption(' + sIdx + ',' + qIdx + ',' + oi + ',this.value)">';
                             }
@@ -493,7 +493,7 @@
                     preview += '</div>';
                     preview += '<div style="margin:4px 0;font-size:.9rem">' + escapeHtml(q.text).substring(0, 200) + '</div>';
                     if (q.options.length) {
-                        preview += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin:4px 0">';
+                        preview += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:2px;margin:4px 0">';
                         q.options.forEach(function(opt, oi) {
                             var isCorrect = q.answer && opt === q.answer;
                             preview += '<span style="font-size:.82rem;color:#555;' + (isCorrect ? 'color:#2e7d32;font-weight:700' : '') + '">' + String.fromCharCode(65 + oi) + '. ' + escapeHtml(opt).substring(0, 60) + (isCorrect ? ' ✓' : '') + '</span>';

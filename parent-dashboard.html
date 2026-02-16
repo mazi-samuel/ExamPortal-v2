@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Dashboard - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading parent dashboard...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var childProfile = null;
+        var submissions = [];
+        var broadcasts = [];
+        var unreadCount = 0;
+
+        async function init() {
+            profile = await requireAuth(['parent']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Load child profile
+            if (profile.linked_student_id) {
+                var { data } = await db.from('profiles').select('*, schools(name)').eq('id', profile.linked_student_id).single();
+                childProfile = data;
+            }
+
+            if (!childProfile) {
+                document.getElementById('mainContent').innerHTML =
+                    '<div class="empty-state">' +
+                    '<i class="fas fa-unlink"></i>' +
+                    '<h3>No Child Linked</h3>' +
+                    '<p>Your account is not linked to any student yet. Please contact the school administrator or re-register with your child\'s username.</p>' +
+                    '</div>';
+                return;
+            }
+
+            await loadData();
+            renderDashboard();
+        }
+
+        async function loadData() {
+            // Load submissions
+            var { data: subs } = await db
+                .from('exam_submissions')
+                .select('*, exams(title, class, total_marks, exam_date, subjects(name, icon))')
+                .eq('student_id', childProfile.id)
+                .order('submitted_at', { ascending: false });
+            submissions = (subs || []).filter(function(s) { return s.submitted_at; });
+
+            // Load broadcasts
+            var { data: msgs } = await db
+                .from('broadcasts')
+                .select('*, profiles:sender_id(full_name, teacher_status)')
+                .eq('school_id', profile.school_id)
+                .order('created_at', { ascending: false })
+                .limit(50);
+            broadcasts = (msgs || []).filter(function(b) {
+                return !b.target_class || b.target_class === childProfile.class;
+            });
+
+            // Load read status
+            var { data: reads } = await db
+                .from('notification_reads')
+                .select('broadcast_id')
+                .eq('parent_id', profile.id);
+            var readIds = (reads || []).map(function(r) { return r.broadcast_id; });
+            broadcasts.forEach(function(b) { b._read = readIds.indexOf(b.id) >= 0; });
+            unreadCount = broadcasts.filter(function(b) { return !b._read; }).length;
+        }
+
+        function renderDashboard() {
+            var schoolName = childProfile.schools ? childProfile.schools.name : 'School';
+            var classLabel = getClassWithSection(childProfile.class, childProfile.class_section);
+
+            var completedCount = submissions.length;
+            var avgPct = 0;
+            if (completedCount > 0) {
+                avgPct = Math.round(submissions.reduce(function(a, s) { return a + (s.percentage || 0); }, 0) / completedCount);
+            }
+            var avgGrade = getGradeLetter(avgPct);
+
+            // Subject performance breakdown
+            var subjectMap = {};
+            submissions.forEach(function(s) {
+                var subName = (s.exams && s.exams.subjects) ? s.exams.subjects.name : 'Unknown';
+                if (!subjectMap[subName]) subjectMap[subName] = { total: 0, count: 0, scores: [] };
+                subjectMap[subName].total += (s.percentage || 0);
+                subjectMap[subName].count++;
+                subjectMap[subName].scores.push(s);
+            });
+
+            var html = '';
+
+            // Header
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-user-friends"></i> Parent Dashboard</h1>';
+            html += '<p class="subtitle">' + schoolName + '</p></div>';
+            html += '</div>';
+
+            // Child info card
+            html += '<div class="card mb-3" style="border-left:5px solid #667eea">';
+            html += '<div class="d-flex align-center gap-2 flex-wrap">';
+            html += '<div class="child-avatar" style="width:48px;height:48px;min-width:48px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.4rem;font-weight:700">';
+            html += childProfile.full_name.charAt(0).toUpperCase();
+            html += '</div>';
+            html += '<div>';
+            html += '<h2 style="margin:0">' + childProfile.full_name + '</h2>';
+            html += '<p class="text-muted" style="margin:0">' + classLabel + ' &bull; @' + (childProfile.username || '') + '</p>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Stats
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + completedCount + '</span><span class="stat-label">Exams Taken</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + avgPct + '%</span><span class="stat-label">Average Score</span></div>';
+            html += '<div class="stat-card"><span class="stat-number"><span class="grade-badge ' + getGradeClass(avgGrade) + '">' + avgGrade + '</span></span><span class="stat-label">Average Grade</span></div>';
+            html += '<div class="stat-card" style="cursor:pointer" onclick="switchTab(\'notifications\')">';
+            html += '<span class="stat-number">' + unreadCount + '</span><span class="stat-label">';
+            html += unreadCount > 0 ? '<span class="badge badge-danger">New</span> Notifications' : 'Notifications';
+            html += '</span></div>';
+            html += '</div>';
+
+            // Tabs
+            html += '<div class="tabs">';
+            html += '<button class="tab-btn active" onclick="switchTab(\'performance\')"><i class="fas fa-chart-line"></i> Performance</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'results\')"><i class="fas fa-poll"></i> Exam Results</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'subjects\')"><i class="fas fa-book"></i> Subject Breakdown</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'notifications\')">';
+            html += '<i class="fas fa-bell"></i> Notifications';
+            if (unreadCount > 0) html += ' <span class="badge badge-danger" style="font-size:.7rem;padding:2px 6px">' + unreadCount + '</span>';
+            html += '</button>';
+            html += '</div>';
+
+            // Tab: Performance Overview
+            html += '<div class="tab-content active" id="tab-performance">';
+            html += '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-chart-bar"></i> Performance Overview</h3>';
+            if (completedCount === 0) {
+                html += '<div class="empty-state"><i class="fas fa-clipboard"></i><h3>No exams taken yet</h3><p>Your child has not completed any exams.</p></div>';
+            } else {
+                // Performance bars per subject
+                html += '<div class="mt-2">';
+                Object.keys(subjectMap).forEach(function(subName) {
+                    var data = subjectMap[subName];
+                    var avg = Math.round(data.total / data.count);
+                    var grade = getGradeLetter(avg);
+                    var barColor = avg >= 70 ? '#4caf50' : avg >= 50 ? '#ff9800' : '#f44336';
+                    html += '<div class="mb-2">';
+                    html += '<div class="d-flex justify-between align-center" style="margin-bottom:4px">';
+                    html += '<span style="font-weight:700">' + subName + '</span>';
+                    html += '<span><span class="grade-badge ' + getGradeClass(grade) + '">' + grade + '</span> ' + avg + '% (' + data.count + ' exam' + (data.count > 1 ? 's' : '') + ')</span>';
+                    html += '</div>';
+                    html += '<div style="height:14px;background:#e0e0e0;border-radius:7px;overflow:hidden">';
+                    html += '<div style="height:100%;width:' + avg + '%;background:' + barColor + ';border-radius:7px;transition:width .5s"></div>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+
+                // Recent trend (last 5 exams)
+                html += '<h3 class="mt-3"><i class="fas fa-trending-up"></i> Recent Trend (Last 5 Exams)</h3>';
+                html += '<div class="d-flex gap-2 flex-wrap mt-2">';
+                submissions.slice(0, 5).forEach(function(s) {
+                    var pct = Math.round(s.percentage || 0);
+                    var gl = s.grade_letter || '-';
+                    var subName = (s.exams && s.exams.subjects) ? s.exams.subjects.name : '';
+                    html += '<div class="card" style="flex:1;min-width:120px;text-align:center;padding:14px">';
+                    html += '<div style="font-size:1.5rem;font-weight:700;color:#667eea">' + pct + '%</div>';
+                    html += '<span class="grade-badge ' + getGradeClass(gl) + '">' + gl + '</span>';
+                    html += '<div class="text-muted" style="font-size:.8rem;margin-top:6px">' + subName + '</div>';
+                    html += '<div class="text-muted" style="font-size:.75rem">' + formatDate(s.submitted_at) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // Tab: Exam Results
+            html += '<div class="tab-content" id="tab-results">';
+            if (completedCount === 0) {
+                html += '<div class="empty-state"><i class="fas fa-chart-bar"></i><h3>No results yet</h3></div>';
+            } else {
+                html += '<div class="table-wrap"><table><thead><tr>';
+                html += '<th>S/N</th><th>Exam</th><th>Subject</th><th>Score</th><th>%</th><th>Grade</th><th>Date</th><th></th>';
+                html += '</tr></thead><tbody>';
+                submissions.forEach(function(s, i) {
+                    var examTitle = s.exams ? s.exams.title : '-';
+                    var subjectName = (s.exams && s.exams.subjects) ? s.exams.subjects.name : '-';
+                    var gc = getGradeClass(s.grade_letter);
+                    html += '<tr>';
+                    html += '<td>' + (i + 1) + '</td>';
+                    html += '<td>' + examTitle + '</td>';
+                    html += '<td>' + subjectName + '</td>';
+                    html += '<td><strong>' + (s.total_score || 0) + '/' + (s.max_score || 60) + '</strong></td>';
+                    html += '<td>' + Math.round(s.percentage || 0) + '%</td>';
+                    html += '<td><span class="grade-badge ' + gc + '">' + (s.grade_letter || '-') + '</span></td>';
+                    html += '<td>' + formatDate(s.submitted_at) + '</td>';
+                    html += '<td><a href="/student-report.html?submission=' + s.id + '" class="btn btn-sm btn-info"><i class="fas fa-eye"></i> View</a></td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+
+            // Tab: Subject Breakdown
+            html += '<div class="tab-content" id="tab-subjects">';
+            if (Object.keys(subjectMap).length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-book"></i><h3>No subjects data yet</h3></div>';
+            } else {
+                html += '<div class="grid grid-2">';
+                Object.keys(subjectMap).forEach(function(subName) {
+                    var data = subjectMap[subName];
+                    var avg = Math.round(data.total / data.count);
+                    var grade = getGradeLetter(avg);
+                    var best = Math.round(Math.max.apply(null, data.scores.map(function(s) { return s.percentage || 0; })));
+                    var worst = Math.round(Math.min.apply(null, data.scores.map(function(s) { return s.percentage || 0; })));
+
+                    html += '<div class="card">';
+                    html += '<h3 style="color:#667eea;margin-bottom:12px"><i class="fas fa-book"></i> ' + subName + '</h3>';
+                    html += '<div class="grid grid-2" style="gap:8px">';
+                    html += '<div style="text-align:center"><div style="font-size:1.3rem;font-weight:700;color:#667eea">' + avg + '%</div><div class="text-muted" style="font-size:.8rem">Average</div></div>';
+                    html += '<div style="text-align:center"><span class="grade-badge ' + getGradeClass(grade) + '" style="font-size:1.1rem">' + grade + '</span><div class="text-muted" style="font-size:.8rem;margin-top:4px">Grade</div></div>';
+                    html += '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:#4caf50">' + best + '%</div><div class="text-muted" style="font-size:.8rem">Best</div></div>';
+                    html += '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:700;color:#f44336">' + worst + '%</div><div class="text-muted" style="font-size:.8rem">Lowest</div></div>';
+                    html += '</div>';
+                    html += '<div class="text-muted mt-2" style="font-size:.85rem">' + data.count + ' exam(s) completed</div>';
+
+                    // Mini history
+                    html += '<div class="mt-2" style="border-top:1px solid #eee;padding-top:8px">';
+                    html += '<strong style="font-size:.85rem">Recent Scores:</strong>';
+                    html += '<div class="d-flex gap-1 flex-wrap mt-1">';
+                    data.scores.slice(0, 5).forEach(function(s) {
+                        var p = Math.round(s.percentage || 0);
+                        var color = p >= 70 ? '#4caf50' : p >= 50 ? '#ff9800' : '#f44336';
+                        html += '<span style="background:' + color + '20;color:' + color + ';padding:2px 8px;border-radius:10px;font-size:.8rem;font-weight:700">' + p + '%</span>';
+                    });
+                    html += '</div></div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Tab: Notifications
+            html += '<div class="tab-content" id="tab-notifications">';
+            if (broadcasts.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-bell-slash"></i><h3>No notifications yet</h3><p>You\'ll receive updates here when teachers send broadcasts.</p></div>';
+            } else {
+                broadcasts.forEach(function(b) {
+                    var typeIcon = { general: 'fas fa-bullhorn', assignment: 'fas fa-tasks', exam_result: 'fas fa-chart-bar', announcement: 'fas fa-megaphone', urgent: 'fas fa-exclamation-triangle' };
+                    var typeColor = { general: '#667eea', assignment: '#ff9800', exam_result: '#4caf50', announcement: '#2196f3', urgent: '#f44336' };
+                    var icon = typeIcon[b.broadcast_type] || 'fas fa-bell';
+                    var color = typeColor[b.broadcast_type] || '#667eea';
+                    var senderName = b.profiles ? b.profiles.full_name : 'School';
+                    var senderRole = '';
+                    if (b.profiles) {
+                        if (b.profiles.teacher_status === 'head_teacher') senderRole = 'Head Teacher';
+                        else if (b.profiles.teacher_status === 'class_teacher') senderRole = 'Class Teacher';
+                        else senderRole = 'Teacher';
+                    }
+
+                    html += '<div class="card mb-2 notification-card' + (b._read ? '' : ' notification-unread') + '" style="border-left:4px solid ' + color + ';cursor:pointer" onclick="markRead(\'' + b.id + '\', this)">';
+                    html += '<div class="d-flex justify-between align-center flex-wrap gap-1">';
+                    html += '<div class="d-flex align-center gap-2">';
+                    html += '<i class="' + icon + '" style="color:' + color + ';font-size:1.3rem"></i>';
+                    html += '<div>';
+                    html += '<h3 style="margin:0;font-size:1rem">' + escapeHtml(b.title) + '</h3>';
+                    html += '<span class="text-muted" style="font-size:.8rem">' + senderName + (senderRole ? ' (' + senderRole + ')' : '') + '</span>';
+                    html += '</div></div>';
+                    html += '<div style="text-align:right">';
+                    html += '<div class="text-muted" style="font-size:.8rem">' + formatDate(b.created_at) + '</div>';
+                    if (b.is_pinned) html += '<span class="badge badge-info" style="font-size:.7rem"><i class="fas fa-thumbtack"></i> Pinned</span>';
+                    if (!b._read) html += ' <span class="badge badge-danger" style="font-size:.7rem">New</span>';
+                    html += '</div></div>';
+                    html += '<p style="margin:8px 0 0;color:#555;font-size:.92rem">' + escapeHtml(b.message) + '</p>';
+                    if (b.target_class) html += '<span class="badge badge-info mt-1" style="font-size:.75rem">' + getClassLabel(b.target_class) + '</span>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        function switchTab(tab) {
+            var tabs = ['performance', 'results', 'subjects', 'notifications'];
+            document.querySelectorAll('.tab-btn').forEach(function(b, i) {
+                b.classList.toggle('active', tabs[i] === tab);
+            });
+            tabs.forEach(function(t) {
+                var el = document.getElementById('tab-' + t);
+                if (el) el.classList.toggle('active', t === tab);
+            });
+        }
+
+        async function markRead(broadcastId, el) {
+            if (el.classList.contains('notification-unread')) {
+                el.classList.remove('notification-unread');
+                await db.from('notification_reads').upsert({
+                    broadcast_id: broadcastId,
+                    parent_id: profile.id
+                }, { onConflict: 'broadcast_id,parent_id' });
+            }
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

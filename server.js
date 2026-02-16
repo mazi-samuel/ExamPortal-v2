@@ -54,5 +54,9 @@ app.listen(PORT, () => {
   console.log(`  Portal:       http://localhost:${PORT}/`);
   console.log(`  Legacy Exam:  http://localhost:${PORT}/index-exam.html`);
   console.log(`  Teacher CMS:  http://localhost:${PORT}/teacher-dashboard.html`);
-  console.log(`  Student:      http://localhost:${PORT}/student-dashboard.html\n`);
+  console.log(`  Student:      http://localhost:${PORT}/student-dashboard.html`);
+  console.log(`  Parent:       http://localhost:${PORT}/parent-dashboard.html`);
+  console.log(`  Materials:    http://localhost:${PORT}/class-materials.html`);
+  console.log(`  Forum:        http://localhost:${PORT}/discussion-forum.html`);
+  console.log(`  Broadcasts:   http://localhost:${PORT}/teacher-broadcasts.html\n`);
 });

@@ -84,6 +84,7 @@
             html += '<div class="tabs">';
             html += '<button class="tab-btn active" onclick="switchTab(\'exams\')"><i class="fas fa-file-alt"></i> Available Exams</button>';
             html += '<button class="tab-btn" onclick="switchTab(\'results\')"><i class="fas fa-poll"></i> My Results</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'resources\')"><i class="fas fa-folder-open"></i> Resources</button>';
             html += '</div>';
 
             // Available Exams tab
@@ -149,6 +150,22 @@
             }
             html += '</div>';
 
+            // Resources tab
+            html += '<div class="tab-content" id="tab-resources">';
+            html += '<div class="grid grid-2">';
+            html += '<a href="/class-materials.html" class="card" style="text-decoration:none;text-align:center">';
+            html += '<i class="fas fa-folder-open" style="font-size:2.5rem;color:#ff9800"></i>';
+            html += '<h3 class="mt-1">Class Materials</h3>';
+            html += '<p class="text-muted">View weekly notes, slides, PDFs, audio & video materials</p>';
+            html += '</a>';
+            html += '<a href="/discussion-forum.html" class="card" style="text-decoration:none;text-align:center">';
+            html += '<i class="fas fa-comments" style="font-size:2.5rem;color:#2196f3"></i>';
+            html += '<h3 class="mt-1">Discussion Forum</h3>';
+            html += '<p class="text-muted">Ask questions, discuss topics & earn activity points</p>';
+            html += '</a>';
+            html += '</div>';
+            html += '</div>';
+
             document.getElementById('mainContent').innerHTML = html;
 
             // Check hash for tab
@@ -156,8 +173,9 @@
         }
 
         function switchTab(tab) {
+            var tabs = ['exams', 'results', 'resources'];
             document.querySelectorAll('.tab-btn').forEach(function(b, i) {
-                b.classList.toggle('active', (tab === 'exams' && i === 0) || (tab === 'results' && i === 1));
+                b.classList.toggle('active', tabs[i] === tab);
             });
             document.querySelectorAll('.tab-content').forEach(function(c) {
                 c.classList.remove('active');

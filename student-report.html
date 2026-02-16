@@ -23,7 +23,7 @@
         var profile = null;
 
         async function init() {
-            profile = await requireAuth(['student', 'teacher']);
+            profile = await requireAuth(['student', 'teacher', 'parent']);
             if (!profile) return;
             renderNav(profile);
 
@@ -107,17 +107,17 @@
             html += '<div class="report-body">';
 
             // Student info
-            html += '<table class="report-table">';
-            html += '<tr><th style="width:160px">Student Name</th><td><strong>' + student.full_name + '</strong></td>';
-            html += '<th style="width:100px">Class</th><td>' + getClassLabel(student.class) + '</td></tr>';
+            html += '<div class="table-wrap"><table class="report-table">';
+            html += '<tr><th>Student Name</th><td><strong>' + student.full_name + '</strong></td>';
+            html += '<th>Class</th><td>' + getClassLabel(student.class) + '</td></tr>';
             html += '<tr><th>Subject</th><td>' + (subject.name || '-') + '</td>';
             html += '<th>Exam</th><td>' + (exam.title || '-') + '</td></tr>';
             html += '<tr><th>Exam Date</th><td>' + formatDate(exam.exam_date) + '</td>';
             html += '<th>Submitted</th><td>' + formatDate(sub.submitted_at) + (sub.is_auto_submitted ? ' <em style="color:#f44336">(auto)</em>' : '') + '</td></tr>';
-            html += '</table>';
+            html += '</table></div>';
 
             // Score summary
-            html += '<div style="display:flex;justify-content:center;gap:30px;margin:24px 0;flex-wrap:wrap">';
+            html += '<div style="display:flex;justify-content:center;gap:20px;margin:24px 0;flex-wrap:wrap">';
             html += '<div style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:#4a47a3">' + (sub.total_score || 0) + '<span style="font-size:1.2rem;color:#999">/' + (sub.max_score || 0) + '</span></div><div style="color:#666">Total Score</div></div>';
             html += '<div style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:#667eea">' + Math.round(sub.percentage || 0) + '%</div><div style="color:#666">Percentage</div></div>';
             html += '<div style="text-align:center"><div style="font-size:2.5rem"><span class="grade-badge ' + gc + '" style="font-size:2rem;padding:10px 24px">' + (sub.grade_letter || '-') + '</span></div><div style="color:#666;margin-top:4px">Grade</div></div>';
@@ -125,7 +125,7 @@
 
             // Section breakdown
             html += '<h3 style="margin-top:20px"><i class="fas fa-chart-pie"></i> Section Breakdown</h3>';
-            html += '<table class="report-table mt-2">';
+            html += '<div class="table-wrap"><table class="report-table mt-2">';
             html += '<thead><tr><th>Section</th><th>Type</th><th>Score</th><th>Max Marks</th><th>%</th></tr></thead>';
             html += '<tbody>';
             sections.forEach(function(sec) {
@@ -140,7 +140,7 @@
                 html += '<td>' + secPct + '%</td>';
                 html += '</tr>';
             });
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
 
             // Performance bar
             var pct = Math.round(sub.percentage || 0);

@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Materials - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        .view-indicator { display:inline-flex; align-items:center; gap:4px; font-size:.75rem; padding:2px 8px; border-radius:12px; }
+        .view-indicator.viewed { background:#e8f5e9; color:#2e7d32; }
+        .view-indicator.not-viewed { background:#fce4ec; color:#c62828; }
+        .view-count { background:#e3f2fd; color:#1565c0; display:inline-flex; align-items:center; gap:4px; font-size:.75rem; padding:2px 8px; border-radius:12px; cursor:pointer; position:relative; }
+        .view-count:hover .view-tooltip { display:block; }
+        .view-tooltip { display:none; position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:8px 12px; border-radius:8px; font-size:.75rem; white-space:nowrap; z-index:100; max-height:200px; overflow-y:auto; }
+        .view-tooltip::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#333; }
+        .view-tooltip div { padding:2px 0; white-space:nowrap; }
+        .preview-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:1000; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+        .preview-container { background:#fff; border-radius:16px; width:90%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; cursor:default; overflow:hidden; }
+        .preview-header { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; border-bottom:1px solid #eee; }
+        .preview-header h3 { margin:0; font-size:1rem; }
+        .preview-body { flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; min-height:300px; background:#f5f5f5; }
+        .preview-body iframe { width:100%; height:70vh; border:none; }
+        .preview-body img { max-width:100%; max-height:70vh; object-fit:contain; }
+        .preview-body video, .preview-body audio { width:100%; max-height:70vh; }
+        .preview-body .no-preview { text-align:center; padding:40px 20px; color:#888; }
+        .preview-body .no-preview i { font-size:3rem; display:block; margin-bottom:12px; }
+        @media (max-width:480px) {
+            .preview-container { width:96%; border-radius:10px; }
+            .preview-header { padding:10px 14px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader"><div class="loader"></div><p>Loading materials...</p></div>
+        </div>
+    </div>
+
+    <!-- Module Modal -->
+    <div class="modal-overlay" id="moduleModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="moduleModalTitle"><i class="fas fa-calendar-week"></i> Create Weekly Module</h2>
+                <button class="modal-close" onclick="closeModuleModal()">&times;</button>
+            </div>
+            <form onsubmit="saveModule(event)">
+                <input type="hidden" id="moduleId">
+                <div class="form-group">
+                    <label>Subject *</label>
+                    <select id="moduleSubject" class="form-control" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Class *</label>
+                    <select id="moduleClass" class="form-control" required>
+                        <option value="">-- Select Class --</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Week Number *</label>
+                        <input type="number" id="moduleWeek" class="form-control" min="1" max="52" placeholder="e.g. 1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Module Title *</label>
+                        <input type="text" id="moduleTitle" class="form-control" placeholder="e.g. Introduction to Programming" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Weekly Summary</label>
+                    <textarea id="moduleSummary" class="form-control" rows="4" placeholder="Write a summary of what students will learn this week..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" id="saveModuleBtn">
+                    <i class="fas fa-save"></i> Save Module
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Upload Material Modal -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cloud-upload-alt"></i> Upload Material</h2>
+                <button class="modal-close" onclick="closeUploadModal()">&times;</button>
+            </div>
+            <form onsubmit="uploadMaterial(event)">
+                <input type="hidden" id="uploadModuleId">
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" id="matTitle" class="form-control" placeholder="e.g. Chapter 1 Notes" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="matDescription" class="form-control" placeholder="Brief description (optional)">
+                </div>
+                <div class="form-group">
+                    <label>Material Type *</label>
+                    <select id="matType" class="form-control" required>
+                        <option value="notes">Class Notes</option>
+                        <option value="slides">Presentation Slides</option>
+                        <option value="pdf">PDF Document</option>
+                        <option value="document">Word Document</option>
+                        <option value="audio">Audio</option>
+                        <option value="video">Video</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>File *</label>
+                    <div class="file-drop" id="fileDrop" onclick="document.getElementById('matFile').click()">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p id="fileLabel">Click or drag a file here to upload</p>
+                        <p class="form-hint">Supports PDF, Word, PowerPoint, images, audio, video (max 50MB)</p>
+                    </div>
+                    <input type="file" id="matFile" style="display:none" accept=".pdf,.doc,.docx,.ppt,.pptx,.mp3,.mp4,.wav,.ogg,.webm,.m4a,.m4v,.mov,.avi,.jpg,.jpeg,.png,.gif" onchange="onFileSelected(event)">
+                </div>
+                <button type="submit" class="btn btn-success btn-block" id="uploadBtn">
+                    <i class="fas fa-upload"></i> Upload Material
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var isTeacher = false;
+        var subjects = [];
+        var modules = [];
+        var materials = [];
+        var materialViews = {}; // { material_id: [{ viewer_id, full_name, viewed_at }] }
+        var filterSubject = '';
+        var filterClass = '';
+        var selectedFile = null;
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'student', 'parent']);
+            if (!profile) return;
+            renderNav(profile);
+            isTeacher = profile.role === 'teacher';
+
+            // Load subjects for this school
+            var subQuery = db.from('subjects').select('*').eq('school_id', profile.school_id).order('name');
+            var { data: subs } = await subQuery;
+            subjects = subs || [];
+
+            await loadModules();
+            renderPage();
+
+            // Setup file drag-drop
+            var drop = document.getElementById('fileDrop');
+            if (drop) {
+                drop.addEventListener('dragover', function(e) { e.preventDefault(); drop.classList.add('dragover'); });
+                drop.addEventListener('dragleave', function() { drop.classList.remove('dragover'); });
+                drop.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    drop.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        selectedFile = e.dataTransfer.files[0];
+                        document.getElementById('fileLabel').textContent = selectedFile.name + ' (' + formatFileSize(selectedFile.size) + ')';
+                    }
+                });
+            }
+        }
+
+        async function loadModules() {
+            var query = db.from('weekly_modules')
+                .select('*, subjects(name, icon), class_materials(*)')
+                .eq('school_id', profile.school_id)
+                .order('week_number', { ascending: true });
+
+            if (profile.role === 'student') {
+                query = query.eq('class', getBaseGrade(profile.class));
+            } else if (profile.role === 'parent') {
+                // Get linked student's class
+                if (profile.linked_student_id) {
+                    var { data: child } = await db.from('profiles').select('class').eq('id', profile.linked_student_id).single();
+                    if (child) query = query.eq('class', getBaseGrade(child.class));
+                }
+            }
+
+            var { data } = await query;
+            modules = data || [];
+
+            // Load material views for all materials
+            var allMatIds = [];
+            modules.forEach(function(m) {
+                (m.class_materials || []).forEach(function(mat) { allMatIds.push(mat.id); });
+            });
+            materialViews = {};
+            if (allMatIds.length > 0) {
+                var { data: views } = await db.from('material_views')
+                    .select('*, profiles(full_name, role)')
+                    .in('material_id', allMatIds);
+                (views || []).forEach(function(v) {
+                    if (!materialViews[v.material_id]) materialViews[v.material_id] = [];
+                    materialViews[v.material_id].push(v);
+                });
+            }
+        }
+
+        function renderPage() {
+            var html = '';
+
+            // Header
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-folder-open"></i> Class Materials & Weekly Modules</h1>';
+            html += '<p class="subtitle">Organized learning materials by week</p></div>';
+            if (isTeacher) {
+                html += '<div class="btn-group">';
+                html += '<button class="btn btn-success" onclick="openModuleModal()"><i class="fas fa-plus"></i> New Module</button>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Filters
+            html += '<div class="d-flex gap-2 flex-wrap mb-3">';
+            html += '<select class="form-control" style="max-width:200px" onchange="filterSubject=this.value;renderPage()">';
+            html += '<option value="">All Subjects</option>';
+            subjects.forEach(function(s) {
+                html += '<option value="' + s.id + '"' + (filterSubject === s.id ? ' selected' : '') + '>' + s.name + '</option>';
+            });
+            html += '</select>';
+            html += '<select class="form-control" style="max-width:200px" onchange="filterClass=this.value;renderPage()">';
+            html += '<option value="">All Classes</option>';
+            CLASS_OPTIONS.forEach(function(c) {
+                html += '<option value="' + c.value + '"' + (filterClass === c.value ? ' selected' : '') + '>' + c.label + '</option>';
+            });
+            html += '</select>';
+            html += '</div>';
+
+            // Filter modules
+            var filtered = modules.filter(function(m) {
+                if (filterSubject && m.subject_id !== filterSubject) return false;
+                if (filterClass && m.class !== filterClass) return false;
+                return true;
+            });
+
+            // Stats
+            var totalMaterials = 0;
+            filtered.forEach(function(m) { totalMaterials += (m.class_materials || []).length; });
+
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + filtered.length + '</span><span class="stat-label">Weekly Modules</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + totalMaterials + '</span><span class="stat-label">Total Materials</span></div>';
+            html += '</div>';
+
+            if (filtered.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-folder-open"></i><h3>No weekly modules yet</h3>';
+                if (isTeacher) html += '<p>Create your first weekly module to start organizing materials.</p>';
+                else html += '<p>Your teacher has not uploaded any materials yet.</p>';
+                html += '</div>';
+            } else {
+                filtered.forEach(function(mod) {
+                    var subName = mod.subjects ? mod.subjects.name : 'Unknown';
+                    var subIcon = mod.subjects && mod.subjects.icon ? mod.subjects.icon : 'fas fa-book';
+                    var mats = mod.class_materials || [];
+
+                    html += '<div class="module-card mb-3">';
+                    html += '<div class="module-header">';
+                    html += '<div class="d-flex align-center gap-2">';
+                    html += '<div class="module-week-badge">Week ' + mod.week_number + '</div>';
+                    html += '<div>';
+                    html += '<h3 style="margin:0">' + escapeHtml(mod.title) + '</h3>';
+                    html += '<span class="text-muted" style="font-size:.85rem"><i class="' + subIcon + '"></i> ' + subName + ' &bull; ' + getClassLabel(mod.class) + '</span>';
+                    html += '</div></div>';
+                    if (isTeacher) {
+                        html += '<div class="d-flex gap-1">';
+                        html += '<button class="btn btn-sm btn-success" onclick="openUploadModal(\'' + mod.id + '\')" title="Upload Material"><i class="fas fa-upload"></i> Upload</button>';
+                        html += '<button class="btn btn-sm btn-info" onclick="editModule(\'' + mod.id + '\')" title="Edit"><i class="fas fa-edit"></i></button>';
+                        html += '<button class="btn btn-sm btn-danger" onclick="deleteModule(\'' + mod.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
+                        html += '</div>';
+                    }
+                    html += '</div>';
+
+                    // Summary
+                    if (mod.summary) {
+                        html += '<div class="module-summary">';
+                        html += '<h4><i class="fas fa-sticky-note"></i> Weekly Summary</h4>';
+                        html += '<p>' + escapeHtml(mod.summary) + '</p>';
+                        html += '</div>';
+                    }
+
+                    // Materials list
+                    if (mats.length === 0) {
+                        html += '<div class="text-muted" style="padding:16px;text-align:center;font-size:.9rem">No materials uploaded yet for this week.</div>';
+                    } else {
+                        html += '<div class="materials-list">';
+                        mats.forEach(function(mat) {
+                            var typeIcons = { notes: 'fas fa-file-alt', slides: 'fas fa-file-powerpoint', pdf: 'fas fa-file-pdf', document: 'fas fa-file-word', audio: 'fas fa-file-audio', video: 'fas fa-file-video', other: 'fas fa-file' };
+                            var typeColors = { notes: '#4caf50', slides: '#ff9800', pdf: '#f44336', document: '#2196f3', audio: '#9c27b0', video: '#e91e63', other: '#607d8b' };
+                            var icon = typeIcons[mat.material_type] || 'fas fa-file';
+                            var color = typeColors[mat.material_type] || '#607d8b';
+                            var typeLabels = { notes: 'Notes', slides: 'Slides', pdf: 'PDF', document: 'Document', audio: 'Audio', video: 'Video', other: 'Other' };
+
+                            // View tracking data
+                            var views = materialViews[mat.id] || [];
+                            var myView = views.find(function(v) { return v.viewer_id === profile.id; });
+
+                            html += '<div class="material-item">';
+                            html += '<div class="d-flex align-center gap-2" style="flex:1;min-width:0">';
+                            html += '<i class="' + icon + '" style="font-size:1.5rem;color:' + color + ';flex-shrink:0"></i>';
+                            html += '<div style="min-width:0">';
+                            html += '<strong>' + escapeHtml(mat.title) + '</strong>';
+                            if (mat.description) html += '<br><span class="text-muted" style="font-size:.82rem">' + escapeHtml(mat.description) + '</span>';
+                            html += '<br><span class="badge" style="background:' + color + '20;color:' + color + ';font-size:.72rem">' + (typeLabels[mat.material_type] || mat.material_type) + '</span>';
+                            if (mat.file_size) html += ' <span class="text-muted" style="font-size:.75rem">' + formatFileSize(mat.file_size) + '</span>';
+
+                            // Seen/read indicators
+                            if (isTeacher) {
+                                // Teachers see view count with tooltip of who viewed
+                                var viewNames = views.map(function(v) { return (v.profiles ? v.profiles.full_name : 'Unknown') + ' (' + (v.profiles ? v.profiles.role : '') + ')'; });
+                                html += ' <span class="view-count"><i class="fas fa-eye"></i> ' + views.length + ' viewed';
+                                if (views.length > 0) {
+                                    html += '<span class="view-tooltip">';
+                                    viewNames.forEach(function(n) { html += '<div>' + escapeHtml(n) + '</div>'; });
+                                    html += '</span>';
+                                }
+                                html += '</span>';
+                            } else {
+                                // Students & parents see their own view status
+                                if (myView) {
+                                    html += ' <span class="view-indicator viewed"><i class="fas fa-check-circle"></i> Viewed</span>';
+                                } else {
+                                    html += ' <span class="view-indicator not-viewed"><i class="fas fa-eye-slash"></i> Not viewed</span>';
+                                }
+                            }
+
+                            html += '</div></div>';
+                            html += '<div class="d-flex gap-1 flex-wrap" style="flex-shrink:0">';
+                            if (mat.file_url) {
+                                // Preview button for all types
+                                html += '<button class="btn btn-sm btn-info" onclick="openPreview(\'' + mat.id + '\')"><i class="fas fa-eye"></i> Preview</button>';
+                                // Download button
+                                html += '<a href="' + mat.file_url + '" download="' + escapeHtml(mat.file_name || mat.title) + '" class="btn btn-sm btn-primary" onclick="recordView(\'' + mat.id + '\')"><i class="fas fa-download"></i> Download</a>';
+                            }
+                            if (isTeacher) {
+                                html += '<button class="btn btn-sm btn-danger" onclick="deleteMaterial(\'' + mat.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
+                            }
+                            html += '</div>';
+                            html += '</div>';
+                        });
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                });
+            }
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        // Module CRUD
+        function openModuleModal(data) {
+            var subSel = document.getElementById('moduleSubject');
+            subSel.innerHTML = '<option value="">-- Select Subject --</option>';
+            subjects.forEach(function(s) {
+                subSel.innerHTML += '<option value="' + s.id + '">' + s.name + ' (' + getClassLabel(s.class) + ')</option>';
+            });
+
+            var classSel = document.getElementById('moduleClass');
+            classSel.innerHTML = '<option value="">-- Select Class --</option>';
+            CLASS_OPTIONS.forEach(function(c) {
+                classSel.innerHTML += '<option value="' + c.value + '">' + c.label + '</option>';
+            });
+
+            if (data) {
+                document.getElementById('moduleModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Module';
+                document.getElementById('moduleId').value = data.id;
+                document.getElementById('moduleSubject').value = data.subject_id;
+                document.getElementById('moduleClass').value = data.class;
+                document.getElementById('moduleWeek').value = data.week_number;
+                document.getElementById('moduleTitle').value = data.title;
+                document.getElementById('moduleSummary').value = data.summary || '';
+            } else {
+                document.getElementById('moduleModalTitle').innerHTML = '<i class="fas fa-calendar-week"></i> Create Weekly Module';
+                document.getElementById('moduleId').value = '';
+                document.getElementById('moduleSubject').value = '';
+                document.getElementById('moduleClass').value = '';
+                document.getElementById('moduleWeek').value = '';
+                document.getElementById('moduleTitle').value = '';
+                document.getElementById('moduleSummary').value = '';
+            }
+            document.getElementById('moduleModal').classList.add('open');
+        }
+
+        function closeModuleModal() { document.getElementById('moduleModal').classList.remove('open'); }
+
+        function editModule(id) {
+            var m = modules.find(function(x) { return x.id === id; });
+            if (m) openModuleModal(m);
+        }
+
+        async function saveModule(e) {
+            e.preventDefault();
+            var id = document.getElementById('moduleId').value;
+            var payload = {
+                school_id: profile.school_id,
+                subject_id: document.getElementById('moduleSubject').value,
+                class: document.getElementById('moduleClass').value,
+                week_number: parseInt(document.getElementById('moduleWeek').value),
+                title: document.getElementById('moduleTitle').value.trim(),
+                summary: document.getElementById('moduleSummary').value.trim() || null,
+                created_by: profile.id
+            };
+
+            try {
+                if (id) {
+                    var { error } = await db.from('weekly_modules').update(payload).eq('id', id);
+                    if (error) throw error;
+                    showToast('Module updated!', 'success');
+                } else {
+                    var { error } = await db.from('weekly_modules').insert(payload);
+                    if (error) throw error;
+                    showToast('Module created!', 'success');
+                }
+                closeModuleModal();
+                await loadModules();
+                renderPage();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteModule(id) {
+            if (!confirm('Delete this module and all its materials?')) return;
+            var { error } = await db.from('weekly_modules').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Module deleted', 'success');
+            await loadModules();
+            renderPage();
+        }
+
+        // Material Upload
+        function openUploadModal(moduleId) {
+            document.getElementById('uploadModuleId').value = moduleId;
+            document.getElementById('matTitle').value = '';
+            document.getElementById('matDescription').value = '';
+            document.getElementById('matType').value = 'notes';
+            document.getElementById('fileLabel').textContent = 'Click or drag a file here to upload';
+            document.getElementById('matFile').value = '';
+            selectedFile = null;
+            document.getElementById('uploadModal').classList.add('open');
+        }
+        function closeUploadModal() { document.getElementById('uploadModal').classList.remove('open'); }
+
+        function onFileSelected(e) {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                document.getElementById('fileLabel').textContent = selectedFile.name + ' (' + formatFileSize(selectedFile.size) + ')';
+
+                // Auto-detect type
+                var ext = selectedFile.name.split('.').pop().toLowerCase();
+                if (ext === 'pdf') document.getElementById('matType').value = 'pdf';
+                else if (['doc', 'docx'].indexOf(ext) >= 0) document.getElementById('matType').value = 'document';
+                else if (['ppt', 'pptx'].indexOf(ext) >= 0) document.getElementById('matType').value = 'slides';
+                else if (['mp3', 'wav', 'ogg', 'm4a'].indexOf(ext) >= 0) document.getElementById('matType').value = 'audio';
+                else if (['mp4', 'webm', 'mov', 'avi', 'm4v'].indexOf(ext) >= 0) document.getElementById('matType').value = 'video';
+            }
+        }
+
+        async function uploadMaterial(e) {
+            e.preventDefault();
+            if (!selectedFile) { showToast('Please select a file', 'error'); return; }
+            if (selectedFile.size > 50 * 1024 * 1024) { showToast('File too large (max 50MB)', 'error'); return; }
+
+            var btn = document.getElementById('uploadBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader" style="width:18px;height:18px;border-width:3px"></span> Uploading...';
+
+            try {
+                var ext = selectedFile.name.split('.').pop();
+                var safeName = Date.now() + '_' + Math.random().toString(36).substring(2, 8) + '.' + ext;
+                var filePath = profile.school_id + '/' + safeName;
+
+                var { error: uploadErr } = await db.storage.from('class-materials').upload(filePath, selectedFile);
+                if (uploadErr) throw uploadErr;
+
+                var { data: urlData } = db.storage.from('class-materials').getPublicUrl(filePath);
+                var fileUrl = urlData.publicUrl;
+
+                var payload = {
+                    module_id: document.getElementById('uploadModuleId').value,
+                    school_id: profile.school_id,
+                    title: document.getElementById('matTitle').value.trim(),
+                    description: document.getElementById('matDescription').value.trim() || null,
+                    material_type: document.getElementById('matType').value,
+                    file_url: fileUrl,
+                    file_name: selectedFile.name,
+                    file_size: selectedFile.size,
+                    uploaded_by: profile.id
+                };
+
+                var { error } = await db.from('class_materials').insert(payload);
+                if (error) throw error;
+
+                showToast('Material uploaded!', 'success');
+                closeUploadModal();
+                await loadModules();
+                renderPage();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-upload"></i> Upload Material';
+        }
+
+        async function deleteMaterial(id) {
+            if (!confirm('Delete this material?')) return;
+            var { error } = await db.from('class_materials').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Material deleted', 'success');
+            await loadModules();
+            renderPage();
+        }
+
+        // Record a material view in the database
+        async function recordView(materialId) {
+            try {
+                await db.from('material_views').upsert({
+                    material_id: materialId,
+                    viewer_id: profile.id,
+                    viewed_at: new Date().toISOString()
+                }, { onConflict: 'material_id,viewer_id' });
+                // Update local cache
+                if (!materialViews[materialId]) materialViews[materialId] = [];
+                var already = materialViews[materialId].find(function(v) { return v.viewer_id === profile.id; });
+                if (!already) {
+                    materialViews[materialId].push({ viewer_id: profile.id, viewed_at: new Date().toISOString(), profiles: { full_name: profile.full_name, role: profile.role } });
+                    renderPage();
+                }
+            } catch (e) { /* silent */ }
+        }
+
+        // Find a material object by id across all modules
+        function findMaterial(id) {
+            for (var i = 0; i < modules.length; i++) {
+                var mats = modules[i].class_materials || [];
+                for (var j = 0; j < mats.length; j++) {
+                    if (mats[j].id === id) return mats[j];
+                }
+            }
+            return null;
+        }
+
+        // Open in-app preview modal and record view
+        async function openPreview(materialId) {
+            var mat = findMaterial(materialId);
+            if (!mat || !mat.file_url) return;
+
+            recordView(materialId);
+
+            var overlay = document.createElement('div');
+            overlay.className = 'preview-overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+            var ext = (mat.file_name || '').split('.').pop().toLowerCase();
+            var type = mat.material_type;
+            var bodyHtml = '';
+
+            if (type === 'pdf' || ext === 'pdf') {
+                bodyHtml = '<iframe src="' + mat.file_url + '#toolbar=1" title="PDF Preview"></iframe>';
+            } else if (type === 'video' || ['mp4','webm','mov','avi','m4v'].indexOf(ext) >= 0) {
+                bodyHtml = '<video controls autoplay><source src="' + mat.file_url + '">Your browser does not support video.</video>';
+            } else if (type === 'audio' || ['mp3','wav','ogg','m4a'].indexOf(ext) >= 0) {
+                bodyHtml = '<div style="padding:40px;width:100%"><audio controls autoplay style="width:100%"><source src="' + mat.file_url + '">Your browser does not support audio.</audio></div>';
+            } else if (['jpg','jpeg','png','gif','webp','svg','bmp'].indexOf(ext) >= 0) {
+                bodyHtml = '<img src="' + mat.file_url + '" alt="' + escapeHtml(mat.title) + '">';
+            } else if (['ppt','pptx'].indexOf(ext) >= 0) {
+                bodyHtml = '<iframe src="https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(mat.file_url) + '" title="Slides Preview"></iframe>';
+            } else if (['doc','docx'].indexOf(ext) >= 0) {
+                bodyHtml = '<iframe src="https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(mat.file_url) + '" title="Document Preview"></iframe>';
+            } else {
+                bodyHtml = '<div class="no-preview"><i class="fas fa-file"></i><p>Preview not available for this file type.</p><p>Click <strong>Download</strong> to open it on your device.</p></div>';
+            }
+
+            overlay.innerHTML = '<div class="preview-container" onclick="event.stopPropagation()">' +
+                '<div class="preview-header">' +
+                '<h3><i class="' + (({ notes:'fas fa-file-alt', slides:'fas fa-file-powerpoint', pdf:'fas fa-file-pdf', document:'fas fa-file-word', audio:'fas fa-file-audio', video:'fas fa-file-video' })[type] || 'fas fa-file') + '"></i> ' + escapeHtml(mat.title) + '</h3>' +
+                '<div class="d-flex gap-1">' +
+                '<a href="' + mat.file_url + '" download="' + escapeHtml(mat.file_name || mat.title) + '" class="btn btn-sm btn-primary"><i class="fas fa-download"></i> Download</a>' +
+                '<button class="btn btn-sm btn-danger" onclick="this.closest(\'.preview-overlay\').remove()"><i class="fas fa-times"></i></button>' +
+                '</div></div>' +
+                '<div class="preview-body">' + bodyHtml + '</div>' +
+                '</div>';
+
+            document.body.appendChild(overlay);
+        }
+
+        function previewMedia(url, type) {
+            var modal = document.createElement('div');
+            modal.className = 'modal-overlay open';
+            modal.style.cursor = 'pointer';
+            modal.onclick = function() { modal.remove(); };
+            var inner = '<div class="modal" style="max-width:700px" onclick="event.stopPropagation()">';
+            if (type === 'video') {
+                inner += '<video controls autoplay style="width:100%;border-radius:12px"><source src="' + url + '">Your browser does not support video.</video>';
+            } else {
+                inner += '<audio controls autoplay style="width:100%"><source src="' + url + '">Your browser does not support audio.</audio>';
+            }
+            inner += '<button class="btn btn-sm btn-danger mt-2" onclick="this.closest(\'.modal-overlay\').remove()"><i class="fas fa-times"></i> Close</button>';
+            inner += '</div>';
+            modal.innerHTML = inner;
+            document.body.appendChild(modal);
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes) return '';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

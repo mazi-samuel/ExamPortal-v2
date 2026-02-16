@@ -63,7 +63,7 @@ img { max-width: 100%; }
 .container-lg { max-width: 1200px; }
 
 /* ---------- Typography ---------- */
-h1, h2, h3. h4 { font-family: 'Fredoka One', cursive; color: #4a47a3; }
+h1, h2, h3, h4 { font-family: 'Fredoka One', cursive; color: #4a47a3; }
 h1 { font-size: 2rem; margin-bottom: 8px; }
 h2 { font-size: 1.6rem; margin-bottom: 6px; }
 h3 { font-size: 1.25rem; }
@@ -330,11 +330,11 @@ tfoot td { padding: 12px; font-weight: 700; background: #f5f5f5; text-align: cen
   color: #fff; padding: 24px; text-align: center;
 }
 .report-body { padding: 28px; }
-.report-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+.report-table { width: 100%; border-collapse: collapse; margin: 16px 0; min-width: 0; table-layout: auto; }
 .report-table th, .report-table td { border: 1px solid #ccc; padding: 10px 12px; }
-.report-table th { background: #f0f4ff; color: #4a47a3; }
+.report-table th { background: #f0f4ff; color: #4a47a3; white-space: nowrap; }
 .report-footer { padding: 24px; border-top: 2px solid #e0e0e0; }
-.report-signatures { display: flex; justify-content: space-around; margin-top: 30px; }
+.report-signatures { display: flex; justify-content: space-around; margin-top: 30px; flex-wrap: wrap; gap: 16px; }
 .report-sig-block { text-align: center; }
 .report-sig-block img { max-width: 160px; max-height: 70px; margin-bottom: 4px; }
 .report-sig-line { width: 180px; border-top: 1px solid #333; padding-top: 4px; font-size: .85rem; }
@@ -421,13 +421,267 @@ tfoot td { padding: 12px; font-weight: 700; background: #f5f5f5; text-align: cen
   .report-card { border: 1px solid #000; }
 }
 
+/* ---------- Notification Cards ---------- */
+.notification-card { transition: .25s; }
+.notification-unread { background: #f0f4ff; border-left-width: 5px !important; }
+.notification-unread::after {
+  content: ''; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: #f44336; position: absolute;
+  top: 12px; right: 12px;
+}
+.notification-card { position: relative; }
+
+/* ---------- Module Cards ---------- */
+.module-card {
+  background: #fff; border-radius: 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.06);
+  border: 2px solid #e8e8e8; overflow: hidden;
+  transition: .25s;
+}
+.module-card:hover { border-color: #667eea; }
+.module-header {
+  background: linear-gradient(135deg, #f8f9ff, #eef1ff);
+  padding: 20px 24px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px;
+  border-bottom: 2px solid #e8e8e8;
+}
+.module-week-badge {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff; font-family: 'Fredoka One', cursive;
+  padding: 8px 18px; border-radius: 25px; font-size: .92rem;
+  white-space: nowrap;
+}
+.module-summary {
+  padding: 16px 24px; background: #fffbf0;
+  border-bottom: 1px solid #f0e8d0;
+}
+.module-summary h4 { color: #ff9800; margin-bottom: 6px; font-size: .95rem; }
+.module-summary p { color: #666; font-size: .92rem; line-height: 1.6; white-space: pre-line; }
+
+/* ---------- Materials List ---------- */
+.materials-list { padding: 8px 0; }
+.material-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 24px; border-bottom: 1px solid #f0f0f0;
+  transition: .2s; flex-wrap: wrap; gap: 8px;
+}
+.material-item:last-child { border-bottom: none; }
+.material-item:hover { background: rgba(102,126,234,.03); }
+
+/* ---------- Discussion Forum ---------- */
+.topic-card { transition: .2s; }
+.topic-card:hover { border-color: #667eea; transform: translateY(-2px); }
+.topic-reply-count {
+  background: #e3f2fd; color: #1565c0;
+  padding: 6px 14px; border-radius: 20px;
+  font-size: .85rem; font-weight: 700;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+
+.forum-post {
+  background: #fff; border-radius: 14px; padding: 20px;
+  margin-bottom: 12px; border: 2px solid #e8e8e8;
+  transition: .2s;
+}
+.forum-post:hover { border-color: #c8d0ff; }
+.forum-post-answer { border-color: #4caf50; background: #f9fff9; }
+.forum-post-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+}
+.forum-post-body {
+  color: #444; font-size: .95rem; line-height: 1.7;
+}
+
+.forum-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.forum-points-badge {
+  font-size: 2.2rem; font-weight: 700; color: #ff9800;
+  font-family: 'Fredoka One', cursive;
+}
+
 /* ---------- Responsive ---------- */
+
+/* Medium screens / tablets */
 @media (max-width: 768px) {
   .container { padding: 20px; border-radius: 16px; }
   h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.3rem; }
+  h3 { font-size: 1.1rem; }
   .hero h1 { font-size: 1.8rem; }
   .hero { padding: 36px 16px; }
   .form-row { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .btn-group { flex-direction: column; }
+  .btn-lg { padding: 14px 28px; font-size: 1.05rem; }
+
+  /* Tabs - horizontal scroll on small screens */
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; gap: 0; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { white-space: nowrap; padding: 10px 16px; font-size: .9rem; flex-shrink: 0; }
+
+  /* Grids stack more on mobile */
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+  /* Page wrappers */
+  .page-wrap { padding: 16px; }
+
+  /* Timer bar on mobile */
+  .timer-bar { flex-wrap: wrap; padding: 8px 16px; gap: 8px; }
+  .timer-display { font-size: 1.3rem; }
+  .timer-progress { margin: 0 12px; min-width: 0; }
+
+  /* Report card */
+  .report-card { border-radius: 4px; }
+  .report-body { padding: 20px; }
+  .report-header { padding: 18px; }
+  .report-header h1 { font-size: 1.3rem; }
+  .report-table th, .report-table td { padding: 8px 6px; font-size: .85rem; }
+  .report-signatures { flex-direction: column; gap: 24px; align-items: center; }
+  .report-sig-line { width: 160px; }
+  .report-footer { padding: 18px; }
+
+  /* Section builder for exam creation */
+  .section-builder { padding: 16px; }
+  .section-builder-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+
+  /* File upload */
+  .file-drop { padding: 24px; }
+  .file-drop i { font-size: 2.2rem; }
+
+  /* Question cards */
+  .question-card { padding: 20px; }
+
+  /* Modal */
+  .modal { padding: 24px; margin: 10px; border-radius: 16px; }
+
+  /* Exam cards */
+  .exam-card { padding: 18px; }
+  .exam-card-header { gap: 10px; }
+  .exam-card-icon { width: 42px; height: 42px; font-size: 1.1rem; }
+
+  /* Module cards */
+  .module-header { padding: 16px; }
+  .module-summary { padding: 12px 16px; }
+  .material-item { padding: 12px 16px; }
+
+  /* Forum */
+  .forum-post { padding: 16px; }
+  .forum-post-header { flex-direction: column; align-items: flex-start; }
+
+  /* Feature cards on landing */
+  .features-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .feature-card { padding: 20px; }
+  .feature-card i { font-size: 2rem; }
+}
+
+/* Small screens / phones */
+@media (max-width: 480px) {
+  .container { padding: 14px; border-radius: 14px; }
+  .page-wrap { padding: 10px; }
+  h1 { font-size: 1.35rem; }
+  h2 { font-size: 1.15rem; }
+  .subtitle { font-size: .92rem; }
+
+  /* Stats use full-width single column under 480 */
+  .stats-grid { grid-template-columns: 1fr; }
+  .stat-card { padding: 14px; }
+  .stat-number { font-size: 1.6rem; }
+
+  /* Buttons */
+  .btn { padding: 10px 18px; font-size: .92rem; }
+  .btn-sm { padding: 7px 12px; font-size: .82rem; }
+  .btn-lg { padding: 12px 22px; font-size: 1rem; }
+  .btn-group { gap: 8px; }
+
+  /* Forms */
+  .form-control { padding: 10px 12px; font-size: .95rem; }
+  .form-group label { font-size: .9rem; }
+
+  /* Tabs */
+  .tab-btn { padding: 8px 12px; font-size: .85rem; }
+
+  /* Cards */
+  .card { padding: 16px; border-radius: 14px; }
+
+  /* Tables — allow smaller min-width */
+  table { min-width: 600px; }
+  thead th { padding: 10px 8px; font-size: .82rem; }
+  tbody td { padding: 8px 6px; font-size: .82rem; }
+
+  /* Report */
+  .report-body { padding: 14px; }
+  .report-header { padding: 14px; }
+
+  /* Grids always single col on very small */
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+
+  /* Features */
+  .features-grid { grid-template-columns: 1fr; }
+
+  /* Notification badge positioning */
+  .notification-unread::after { top: 8px; right: 8px; }
+
+  /* Hero */
+  .hero { padding: 24px 12px; border-radius: 16px; }
+  .hero h1 { font-size: 1.5rem; }
+  .hero p { font-size: 1rem; }
+  .hero-emoji { font-size: 3rem; }
+
+  /* Timer bar */
+  .timer-bar { top: 56px; font-size: .85rem; }
+  .timer-display { font-size: 1.1rem; }
+
+  /* Empty state */
+  .empty-state { padding: 30px 14px; }
+  .empty-state i { font-size: 2.6rem; }
+
+  /* Forum */
+  .forum-avatar { width: 32px; height: 32px; font-size: .9rem; }
+  .forum-points-badge { font-size: 1.6rem; }
+  .topic-reply-count { padding: 4px 10px; font-size: .8rem; }
+
+  /* Module cards */
+  .module-week-badge { padding: 6px 14px; font-size: .82rem; }
+  .module-header { padding: 14px; }
+  .module-summary { padding: 10px 14px; }
+
+  /* Exam builder sections */
+  .section-builder { padding: 12px; }
+  .question-item { padding: 12px; }
+
+  /* Alert */
+  .alert { padding: 12px 14px; font-size: .9rem; }
+
+  /* Toast */
+  .toast { left: 10px; right: 10px; bottom: 10px; text-align: center; }
+
+  /* Signature preview on teacher profile */
+  .signature-preview { width: 180px; height: 90px; }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+  .container { padding: 10px; border-radius: 12px; }
+  .page-wrap { padding: 6px; }
+  h1 { font-size: 1.2rem; }
+  .btn { padding: 8px 14px; font-size: .85rem; }
+  .stats-grid { gap: 8px; }
+  .stat-number { font-size: 1.4rem; }
+  .tab-btn { padding: 6px 10px; font-size: .8rem; }
+  .nav-brand { font-size: 1.2rem; }
+
+  /* Tables even tighter */
+  table { min-width: 500px; }
+  thead th { padding: 8px 4px; font-size: .78rem; }
+  tbody td { padding: 6px 4px; font-size: .78rem; }
 }

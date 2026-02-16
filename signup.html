@@ -33,6 +33,9 @@
                 <button class="tab-btn" id="tabTeacher" onclick="setRole('teacher')">
                     <i class="fas fa-chalkboard-teacher"></i> Teacher
                 </button>
+                <button class="tab-btn" id="tabParent" onclick="setRole('parent')">
+                    <i class="fas fa-user-friends"></i> Parent
+                </button>
             </div>
 
             <form id="signupForm" onsubmit="handleSignup(event)">
@@ -195,6 +198,23 @@
                     </div>
                 </div>
 
+                <!-- Parent-only fields -->
+                <div id="parentFields" style="display:none">
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope"></i> Your Email Address *</label>
+                        <input type="email" id="emailParent" class="form-control" placeholder="parent@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-child"></i> Child's Username *</label>
+                        <input type="text" id="childUsername" class="form-control" placeholder="Enter your child's student username">
+                        <span class="form-hint">This links your account to your child's records. Make sure the username matches exactly.</span>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Phone Number</label>
+                        <input type="tel" id="parentPhoneField" class="form-control" placeholder="08012345678">
+                    </div>
+                </div>
+
                 <button type="submit" class="btn btn-success btn-block btn-lg mt-2" id="signupBtn">
                     <i class="fas fa-user-plus"></i> Create Account
                 </button>
@@ -215,11 +235,13 @@
             currentRole = role;
             document.getElementById('tabStudent').classList.toggle('active', role === 'student');
             document.getElementById('tabTeacher').classList.toggle('active', role === 'teacher');
+            document.getElementById('tabParent').classList.toggle('active', role === 'parent');
             document.getElementById('usernameGroup').style.display = role === 'student' ? '' : 'none';
             document.getElementById('emailGroupTeacher').style.display = role === 'teacher' ? '' : 'none';
             document.getElementById('emailGroupStudent').style.display = role === 'student' ? '' : 'none';
             document.getElementById('studentFields').style.display = role === 'student' ? '' : 'none';
             document.getElementById('teacherFields').style.display = role === 'teacher' ? '' : 'none';
+            document.getElementById('parentFields').style.display = role === 'parent' ? '' : 'none';
         }
 
         function onTeacherStatusChange() {
@@ -305,6 +327,9 @@
                     if (!username) throw new Error('Please enter a username');
                     if (username.length < 3) throw new Error('Username must be at least 3 characters');
                     email = usernameToEmail(username);
+                } else if (currentRole === 'parent') {
+                    email = document.getElementById('emailParent').value.trim();
+                    if (!email) throw new Error('Please enter your email');
                 } else {
                     email = document.getElementById('emailTeacher').value.trim();
                     if (!email) throw new Error('Please enter your email');
@@ -347,6 +372,23 @@
                     }
                 }
 
+                if (currentRole === 'parent') {
+                    var childUname = document.getElementById('childUsername').value.trim();
+                    if (!childUname) throw new Error('Please enter your child\'s username');
+                    meta.linked_student_username = childUname;
+
+                    // Look up child by username
+                    var childEmail = usernameToEmail(childUname);
+                    var { data: childData } = await db.from('profiles').select('id, school_id').eq('username', childUname).single();
+                    if (childData) {
+                        meta.linked_student_id = childData.id;
+                        // Use child's school if parent didn't select one
+                        if (!schoolId && childData.school_id) schoolId = childData.school_id;
+                    }
+
+                    meta.parent_phone = document.getElementById('parentPhoneField').value.trim() || null;
+                }
+
                 // Sign up
                 var { data, error } = await db.auth.signUp({
                     email: email,
@@ -360,6 +402,8 @@
                 setTimeout(function() {
                     if (currentRole === 'teacher') {
                         window.location.href = '/teacher-dashboard.html';
+                    } else if (currentRole === 'parent') {
+                        window.location.href = '/parent-dashboard.html';
                     } else {
                         window.location.href = '/student-dashboard.html';
                     }
@@ -375,6 +419,7 @@
         // Init
         var params = new URLSearchParams(window.location.search);
         if (params.get('role') === 'teacher') setRole('teacher');
+        if (params.get('role') === 'parent') setRole('parent');
         loadSchoolsList();
     </script>
 </body>

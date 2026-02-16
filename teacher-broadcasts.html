@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broadcasts - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader"><div class="loader"></div><p>Loading broadcasts...</p></div>
+        </div>
+    </div>
+
+    <!-- Broadcast Modal -->
+    <div class="modal-overlay" id="broadcastModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-bullhorn"></i> New Broadcast</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form onsubmit="sendBroadcast(event)">
+                <div class="form-group">
+                    <label>Broadcast Type *</label>
+                    <select id="bcType" class="form-control" required>
+                        <option value="general">General Announcement</option>
+                        <option value="assignment">Assignment Notification</option>
+                        <option value="exam_result">Exam Result Update</option>
+                        <option value="announcement">School Announcement</option>
+                        <option value="urgent">Urgent Notice</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Target Class</label>
+                    <select id="bcClass" class="form-control">
+                        <option value="">All Classes</option>
+                    </select>
+                    <span class="form-hint">Leave as "All Classes" to broadcast to everyone</span>
+                </div>
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" id="bcTitle" class="form-control" placeholder="Broadcast title" required>
+                </div>
+                <div class="form-group">
+                    <label>Message *</label>
+                    <textarea id="bcMessage" class="form-control" rows="4" placeholder="Type your message here..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="bcPinned"> Pin this broadcast (stays at top)
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" id="sendBtn">
+                    <i class="fas fa-paper-plane"></i> Send Broadcast
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var broadcasts = [];
+
+        async function init() {
+            profile = await requireAuth(['teacher']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Populate class dropdown
+            var classSel = document.getElementById('bcClass');
+            CLASS_OPTIONS.forEach(function(c) {
+                var opt = document.createElement('option');
+                opt.value = c.value;
+                opt.textContent = c.label;
+                classSel.appendChild(opt);
+            });
+
+            await loadBroadcasts();
+            renderPage();
+        }
+
+        async function loadBroadcasts() {
+            var query = db.from('broadcasts')
+                .select('*, profiles:sender_id(full_name, teacher_status)')
+                .eq('school_id', profile.school_id)
+                .order('is_pinned', { ascending: false })
+                .order('created_at', { ascending: false });
+
+            if (profile.teacher_status === 'class_teacher' && profile.assigned_class) {
+                query = query.or('target_class.is.null,target_class.eq.' + profile.assigned_class);
+            }
+
+            var { data } = await query.limit(100);
+            broadcasts = data || [];
+        }
+
+        function renderPage() {
+            var html = '';
+
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-bullhorn"></i> Broadcasts & Notifications</h1>';
+            html += '<p class="subtitle">Send announcements to parents and students</p></div>';
+            html += '<button class="btn btn-success" onclick="openModal()"><i class="fas fa-plus"></i> New Broadcast</button>';
+            html += '</div>';
+
+            // Stats
+            var total = broadcasts.length;
+            var assignments = broadcasts.filter(function(b) { return b.broadcast_type === 'assignment'; }).length;
+            var urgent = broadcasts.filter(function(b) { return b.broadcast_type === 'urgent'; }).length;
+
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + total + '</span><span class="stat-label">Total Broadcasts</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + assignments + '</span><span class="stat-label">Assignments</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + urgent + '</span><span class="stat-label">Urgent</span></div>';
+            html += '</div>';
+
+            if (broadcasts.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-satellite-dish"></i><h3>No broadcasts yet</h3><p>Create your first broadcast to notify parents and students.</p></div>';
+            } else {
+                broadcasts.forEach(function(b) {
+                    var typeIcons = { general: 'fas fa-bullhorn', assignment: 'fas fa-tasks', exam_result: 'fas fa-chart-bar', announcement: 'fas fa-megaphone', urgent: 'fas fa-exclamation-triangle' };
+                    var typeColors = { general: '#667eea', assignment: '#ff9800', exam_result: '#4caf50', announcement: '#2196f3', urgent: '#f44336' };
+                    var typeLabels = { general: 'General', assignment: 'Assignment', exam_result: 'Exam Result', announcement: 'Announcement', urgent: 'Urgent' };
+                    var icon = typeIcons[b.broadcast_type] || 'fas fa-bell';
+                    var color = typeColors[b.broadcast_type] || '#667eea';
+                    var label = typeLabels[b.broadcast_type] || b.broadcast_type;
+                    var senderName = b.profiles ? b.profiles.full_name : 'Unknown';
+
+                    html += '<div class="card mb-2" style="border-left:4px solid ' + color + '">';
+                    html += '<div class="d-flex justify-between align-center flex-wrap gap-1">';
+                    html += '<div class="d-flex align-center gap-2">';
+                    html += '<i class="' + icon + '" style="color:' + color + ';font-size:1.3rem"></i>';
+                    html += '<div>';
+                    html += '<h3 style="margin:0;font-size:1rem">' + escapeHtml(b.title) + '</h3>';
+                    html += '<span class="text-muted" style="font-size:.82rem">By ' + escapeHtml(senderName) + '</span>';
+                    html += '</div></div>';
+                    html += '<div class="d-flex align-center gap-1">';
+                    html += '<span class="badge" style="background:' + color + '20;color:' + color + '">' + label + '</span>';
+                    if (b.target_class) html += '<span class="badge badge-info">' + getClassLabel(b.target_class) + '</span>';
+                    if (b.is_pinned) html += '<span class="badge badge-warning"><i class="fas fa-thumbtack"></i></span>';
+                    html += '<span class="text-muted" style="font-size:.8rem">' + formatDate(b.created_at) + '</span>';
+                    if (b.sender_id === profile.id) {
+                        html += '<button class="btn btn-sm btn-danger" onclick="deleteBroadcast(\'' + b.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
+                    }
+                    html += '</div></div>';
+                    html += '<p style="margin:8px 0 0;color:#555;font-size:.92rem;white-space:pre-line">' + escapeHtml(b.message) + '</p>';
+                    html += '</div>';
+                });
+            }
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        function openModal() { document.getElementById('broadcastModal').classList.add('open'); }
+        function closeModal() { document.getElementById('broadcastModal').classList.remove('open'); }
+
+        async function sendBroadcast(e) {
+            e.preventDefault();
+            var btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loader" style="width:18px;height:18px;border-width:3px"></span> Sending...';
+
+            try {
+                var payload = {
+                    school_id: profile.school_id,
+                    sender_id: profile.id,
+                    sender_role: profile.teacher_status || 'teacher',
+                    target_class: document.getElementById('bcClass').value || null,
+                    title: document.getElementById('bcTitle').value.trim(),
+                    message: document.getElementById('bcMessage').value.trim(),
+                    broadcast_type: document.getElementById('bcType').value,
+                    is_pinned: document.getElementById('bcPinned').checked
+                };
+
+                var { error } = await db.from('broadcasts').insert(payload);
+                if (error) throw error;
+
+                showToast('Broadcast sent!', 'success');
+                closeModal();
+
+                // Reset form
+                document.getElementById('bcTitle').value = '';
+                document.getElementById('bcMessage').value = '';
+                document.getElementById('bcPinned').checked = false;
+
+                await loadBroadcasts();
+                renderPage();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Broadcast';
+        }
+
+        async function deleteBroadcast(id) {
+            if (!confirm('Delete this broadcast? This cannot be undone.')) return;
+            var { error } = await db.from('broadcasts').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Broadcast deleted', 'success');
+            await loadBroadcasts();
+            renderPage();
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

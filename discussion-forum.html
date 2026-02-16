@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discussion Forum - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        /* Mention autocomplete dropdown */
+        .mention-wrap { position: relative; }
+        .mention-dropdown {
+            position: absolute; left: 0; right: 0;
+            background: #fff; border: 2px solid #667eea;
+            border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.15);
+            max-height: 200px; overflow-y: auto; z-index: 100;
+            display: none;
+        }
+        .mention-dropdown.open { display: block; }
+        .mention-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; cursor: pointer; transition: .15s;
+        }
+        .mention-item:hover, .mention-item.active { background: rgba(102,126,234,.1); }
+        .mention-item-avatar {
+            width: 30px; height: 30px; border-radius: 50%;
+            background: linear-gradient(135deg,#667eea,#764ba2);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: .85rem; flex-shrink: 0;
+        }
+        .mention-item-name { font-weight: 700; font-size: .92rem; }
+        .mention-item-role { font-size: .75rem; color: #999; margin-left: 4px; }
+
+        /* Rendered @mention tag in posts */
+        .mention-tag {
+            display: inline;
+            background: rgba(102,126,234,.12);
+            color: #4a47a3;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-size: .92em;
+            white-space: nowrap;
+        }
+
+        /* Hint below textarea */
+        .mention-hint {
+            font-size: .8rem; color: #999; margin-top: 4px;
+        }
+        .mention-hint i { color: #667eea; }
+    </style>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader"><div class="loader"></div><p>Loading forum...</p></div>
+        </div>
+    </div>
+
+    <!-- New Topic Modal -->
+    <div class="modal-overlay" id="topicModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-plus-circle"></i> New Discussion Topic</h2>
+                <button class="modal-close" onclick="closeTopicModal()">&times;</button>
+            </div>
+            <form onsubmit="createTopic(event)">
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" id="topicTitle" class="form-control" placeholder="What would you like to discuss?" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="topicDesc" class="form-control" rows="3" placeholder="Add more details..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Subject (optional)</label>
+                        <select id="topicSubject" class="form-control">
+                            <option value="">General Discussion</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Class *</label>
+                        <select id="topicClass" class="form-control" required>
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success btn-block" id="createTopicBtn">
+                    <i class="fas fa-paper-plane"></i> Create Topic
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script>
+        var profile = null;
+        var topics = [];
+        var subjects = [];
+        var leaderboard = [];
+        var currentView = 'topics'; // 'topics' or 'thread'
+        var currentTopic = null;
+        var currentPosts = [];
+        var myPoints = 0;
+        var schoolUsers = []; // all teachers & students for @mention
+
+        async function init() {
+            profile = await requireAuth(['student', 'teacher', 'parent']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Load subjects
+            var { data: subs } = await db.from('subjects').select('*').eq('school_id', profile.school_id).order('name');
+            subjects = subs || [];
+
+            // Load users for @mention tagging
+            var { data: users } = await db.from('profiles')
+                .select('id, full_name, username, role')
+                .eq('school_id', profile.school_id)
+                .in('role', ['teacher', 'student']);
+            schoolUsers = (users || []).filter(function(u) { return u.id !== profile.id; });
+
+            await loadTopics();
+            await loadLeaderboard();
+            renderTopicsList();
+        }
+
+        async function loadTopics() {
+            var query = db.from('discussion_topics')
+                .select('*, profiles:created_by(full_name, role), subjects(name)')
+                .eq('school_id', profile.school_id)
+                .order('is_pinned', { ascending: false })
+                .order('created_at', { ascending: false });
+
+            if (profile.role === 'student') {
+                query = query.eq('class', getBaseGrade(profile.class));
+            }
+
+            var { data } = await query;
+            topics = data || [];
+
+            // Get post counts
+            for (var i = 0; i < topics.length; i++) {
+                var { count } = await db.from('discussion_posts')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('topic_id', topics[i].id);
+                topics[i]._postCount = count || 0;
+            }
+        }
+
+        async function loadLeaderboard() {
+            // Get student class for filtering
+            var studentClass = profile.role === 'student' ? getBaseGrade(profile.class) : null;
+
+            var { data: points } = await db.from('forum_points')
+                .select('student_id, profiles:student_id(full_name, class, role)')
+                .eq('school_id', profile.school_id);
+
+            // Aggregate points per student
+            var pointMap = {};
+            (points || []).forEach(function(p) {
+                if (!p.profiles || p.profiles.role !== 'student') return;
+                if (studentClass && getBaseGrade(p.profiles.class) !== studentClass) return;
+                if (!pointMap[p.student_id]) pointMap[p.student_id] = { name: p.profiles.full_name, points: 0 };
+                pointMap[p.student_id].points++;
+            });
+
+            leaderboard = Object.keys(pointMap).map(function(id) {
+                return { id: id, name: pointMap[id].name, points: pointMap[id].points };
+            }).sort(function(a, b) { return b.points - a.points; }).slice(0, 10);
+
+            // My points
+            var { count } = await db.from('forum_points')
+                .select('*', { count: 'exact', head: true })
+                .eq('student_id', profile.id)
+                .eq('school_id', profile.school_id);
+            myPoints = count || 0;
+        }
+
+        function renderTopicsList() {
+            currentView = 'topics';
+            var html = '';
+
+            // Header
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-comments"></i> Discussion Forum</h1>';
+            html += '<p class="subtitle">Ask questions, share ideas, and help classmates!</p></div>';
+            if (profile.role !== 'parent') {
+                html += '<button class="btn btn-success" onclick="openTopicModal()"><i class="fas fa-plus"></i> New Topic</button>';
+            }
+            html += '</div>';
+
+            // Stats & Leaderboard row
+            html += '<div class="grid grid-3 mb-3">';
+
+            // My stats
+            html += '<div class="card text-center">';
+            html += '<div class="forum-points-badge">' + myPoints + '</div>';
+            html += '<div style="font-weight:700;margin-top:4px">My Points</div>';
+            html += '<div class="text-muted" style="font-size:.82rem">Earn points by posting & helping</div>';
+            html += '</div>';
+
+            // Topic count
+            html += '<div class="card text-center">';
+            html += '<div style="font-size:2rem;font-weight:700;color:#667eea">' + topics.length + '</div>';
+            html += '<div style="font-weight:700;margin-top:4px">Topics</div>';
+            html += '</div>';
+
+            // Leaderboard mini
+            html += '<div class="card">';
+            html += '<h3 style="margin-bottom:8px"><i class="fas fa-trophy" style="color:#ffc107"></i> Top Contributors</h3>';
+            if (leaderboard.length === 0) {
+                html += '<div class="text-muted text-center" style="font-size:.85rem">No activity yet</div>';
+            } else {
+                leaderboard.slice(0, 5).forEach(function(l, i) {
+                    var medals = ['🥇', '🥈', '🥉'];
+                    var medal = i < 3 ? medals[i] : (i + 1) + '.';
+                    html += '<div class="d-flex justify-between align-center" style="padding:4px 0;border-bottom:1px solid #f0f0f0">';
+                    html += '<span style="font-size:.88rem">' + medal + ' ' + escapeHtml(l.name) + '</span>';
+                    html += '<span class="badge badge-info">' + l.points + ' pts</span>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+            html += '</div>';
+
+            // Topics list
+            if (topics.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-comments"></i><h3>No discussions yet</h3>';
+                html += '<p>Start a new topic to begin the conversation!</p></div>';
+            } else {
+                topics.forEach(function(t) {
+                    var authorName = t.profiles ? t.profiles.full_name : 'Unknown';
+                    var authorRole = t.profiles ? (t.profiles.role === 'teacher' ? '<span class="badge badge-info" style="font-size:.7rem">Teacher</span>' : '') : '';
+                    var subName = t.subjects ? t.subjects.name : 'General';
+                    var postCount = t._postCount || 0;
+
+                    html += '<div class="card mb-2 topic-card" onclick="openThread(\'' + t.id + '\')" style="cursor:pointer">';
+                    html += '<div class="d-flex justify-between align-center flex-wrap gap-1">';
+                    html += '<div class="d-flex align-center gap-2" style="flex:1">';
+                    if (t.is_pinned) html += '<i class="fas fa-thumbtack" style="color:#ff9800"></i>';
+                    if (t.is_locked) html += '<i class="fas fa-lock" style="color:#999"></i>';
+                    html += '<div>';
+                    html += '<h3 style="margin:0;font-size:1.05rem;color:#4a47a3">' + escapeHtml(t.title) + '</h3>';
+                    html += '<span class="text-muted" style="font-size:.82rem">by ' + escapeHtml(authorName) + ' ' + authorRole + ' &bull; ' + subName + ' &bull; ' + formatDate(t.created_at) + '</span>';
+                    html += '</div></div>';
+                    html += '<div class="d-flex align-center gap-2">';
+                    html += '<div class="topic-reply-count"><i class="fas fa-comment"></i> ' + postCount + '</div>';
+                    html += '</div></div>';
+                    if (t.description) html += '<p class="text-muted mt-1" style="font-size:.88rem">' + escapeHtml(t.description).substring(0, 150) + '</p>';
+                    html += '</div>';
+                });
+            }
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        async function openThread(topicId) {
+            currentView = 'thread';
+            currentTopic = topics.find(function(t) { return t.id === topicId; });
+            if (!currentTopic) return;
+
+            // Load posts
+            var { data: posts } = await db.from('discussion_posts')
+                .select('*, profiles:author_id(full_name, role, avatar_url)')
+                .eq('topic_id', topicId)
+                .order('created_at', { ascending: true });
+            currentPosts = posts || [];
+
+            renderThread();
+        }
+
+        function renderThread() {
+            var t = currentTopic;
+            var authorName = t.profiles ? t.profiles.full_name : 'Unknown';
+            var subName = t.subjects ? t.subjects.name : 'General';
+            var isTeacher = profile.role === 'teacher';
+
+            var html = '';
+
+            // Back button
+            html += '<button class="btn btn-outline mb-3" onclick="renderTopicsList()"><i class="fas fa-arrow-left"></i> Back to Topics</button>';
+
+            // Topic header
+            html += '<div class="card mb-3" style="border-left:5px solid #667eea">';
+            html += '<div class="d-flex justify-between align-center flex-wrap">';
+            html += '<div>';
+            html += '<h2 style="margin:0">' + escapeHtml(t.title) + '</h2>';
+            html += '<span class="text-muted" style="font-size:.85rem">by ' + escapeHtml(authorName) + ' &bull; ' + subName + ' &bull; ' + formatDate(t.created_at) + '</span>';
+            html += '</div>';
+            if (isTeacher) {
+                html += '<div class="d-flex gap-1">';
+                html += '<button class="btn btn-sm ' + (t.is_pinned ? 'btn-warning' : 'btn-secondary') + '" onclick="togglePin(\'' + t.id + '\')" title="' + (t.is_pinned ? 'Unpin' : 'Pin') + '"><i class="fas fa-thumbtack"></i></button>';
+                html += '<button class="btn btn-sm ' + (t.is_locked ? 'btn-danger' : 'btn-secondary') + '" onclick="toggleLock(\'' + t.id + '\')" title="' + (t.is_locked ? 'Unlock' : 'Lock') + '"><i class="fas fa-lock"></i></button>';
+                html += '<button class="btn btn-sm btn-danger" onclick="deleteTopic(\'' + t.id + '\')"><i class="fas fa-trash"></i></button>';
+                html += '</div>';
+            }
+            html += '</div>';
+            if (t.description) html += '<p style="margin-top:12px;color:#555">' + escapeHtml(t.description) + '</p>';
+            html += '</div>';
+
+            // Posts
+            if (currentPosts.length === 0) {
+                html += '<div class="card text-center mb-3" style="color:#999"><i class="fas fa-comment-slash" style="font-size:2rem"></i><p class="mt-1">No replies yet. Be the first to respond!</p></div>';
+            } else {
+                currentPosts.forEach(function(p) {
+                    var pName = p.profiles ? p.profiles.full_name : 'Unknown';
+                    var pRole = p.profiles ? p.profiles.role : '';
+                    var initial = pName.charAt(0).toUpperCase();
+                    var isOwn = p.author_id === profile.id;
+
+                    html += '<div class="forum-post ' + (p.is_answer ? 'forum-post-answer' : '') + '" id="post-' + p.id + '">';
+                    html += '<div class="forum-post-header">';
+                    html += '<div class="d-flex align-center gap-2">';
+                    html += '<div class="forum-avatar">' + initial + '</div>';
+                    html += '<div>';
+                    html += '<strong>' + escapeHtml(pName) + '</strong>';
+                    if (pRole === 'teacher') html += ' <span class="badge badge-info" style="font-size:.7rem">Teacher</span>';
+                    html += '<div class="text-muted" style="font-size:.78rem">' + formatDate(p.created_at) + '</div>';
+                    html += '</div></div>';
+                    html += '<div class="d-flex gap-1">';
+                    if (p.is_answer) html += '<span class="badge badge-success"><i class="fas fa-check"></i> Answer</span>';
+                    if (isTeacher && !p.is_answer) {
+                        html += '<button class="btn btn-sm btn-success" onclick="markAnswer(\'' + p.id + '\')" title="Mark as Answer"><i class="fas fa-check"></i></button>';
+                    }
+                    if (isOwn || isTeacher) {
+                        html += '<button class="btn btn-sm btn-danger" onclick="deletePost(\'' + p.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
+                    }
+                    html += '</div></div>';
+                    html += '<div class="forum-post-body">' + renderMentions(escapeHtml(p.content)).replace(/\n/g, '<br>') + '</div>';
+                    html += '</div>';
+                });
+            }
+
+            // Reply form
+            if (!t.is_locked && profile.role !== 'parent') {
+                html += '<div class="card mt-3" style="border-top:3px solid #667eea">';
+                html += '<h3><i class="fas fa-reply"></i> Post a Reply</h3>';
+                html += '<form onsubmit="postReply(event)">';
+                html += '<div class="form-group mention-wrap">';
+                html += '<textarea id="replyContent" class="form-control" rows="3" placeholder="Write your reply... Type @ to tag someone" required oninput="handleMentionInput(event)" onkeydown="handleMentionKeydown(event)"></textarea>';
+                html += '<div class="mention-dropdown" id="mentionDropdown"></div>';
+                html += '<p class="mention-hint"><i class="fas fa-at"></i> Type <strong>@</strong> followed by a name to tag someone</p>';
+                html += '</div>';
+                html += '<button type="submit" class="btn btn-primary" id="replyBtn"><i class="fas fa-paper-plane"></i> Post Reply</button>';
+                html += '</form></div>';
+            } else if (t.is_locked) {
+                html += '<div class="alert alert-warning mt-3"><i class="fas fa-lock"></i> This topic is locked. No new replies can be added.</div>';
+            }
+
+            document.getElementById('mainContent').innerHTML = html;
+        }
+
+        // Topic CRUD
+        function openTopicModal() {
+            var subSel = document.getElementById('topicSubject');
+            subSel.innerHTML = '<option value="">General Discussion</option>';
+            subjects.forEach(function(s) {
+                subSel.innerHTML += '<option value="' + s.id + '">' + s.name + '</option>';
+            });
+
+            var classSel = document.getElementById('topicClass');
+            classSel.innerHTML = '<option value="">-- Select --</option>';
+            CLASS_OPTIONS.forEach(function(c) {
+                classSel.innerHTML += '<option value="' + c.value + '"' + (profile.class === c.value ? ' selected' : '') + '>' + c.label + '</option>';
+            });
+
+            document.getElementById('topicTitle').value = '';
+            document.getElementById('topicDesc').value = '';
+            document.getElementById('topicModal').classList.add('open');
+        }
+
+        function closeTopicModal() { document.getElementById('topicModal').classList.remove('open'); }
+
+        async function createTopic(e) {
+            e.preventDefault();
+            var btn = document.getElementById('createTopicBtn');
+            btn.disabled = true;
+
+            try {
+                var payload = {
+                    school_id: profile.school_id,
+                    class: document.getElementById('topicClass').value,
+                    subject_id: document.getElementById('topicSubject').value || null,
+                    title: document.getElementById('topicTitle').value.trim(),
+                    description: document.getElementById('topicDesc').value.trim() || null,
+                    created_by: profile.id
+                };
+
+                var { error } = await db.from('discussion_topics').insert(payload);
+                if (error) throw error;
+
+                // Award points for creating topic
+                if (profile.role === 'student') {
+                    await db.from('forum_points').insert({
+                        student_id: profile.id,
+                        school_id: profile.school_id,
+                        points: 2,
+                        reason: 'post'
+                    });
+                }
+
+                showToast('Topic created!', 'success');
+                closeTopicModal();
+                await loadTopics();
+                await loadLeaderboard();
+                renderTopicsList();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+            btn.disabled = false;
+        }
+
+        async function deleteTopic(id) {
+            if (!confirm('Delete this topic and all its posts?')) return;
+            var { error } = await db.from('discussion_topics').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Topic deleted', 'success');
+            await loadTopics();
+            renderTopicsList();
+        }
+
+        async function togglePin(id) {
+            var t = topics.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var { error } = await db.from('discussion_topics').update({ is_pinned: !t.is_pinned }).eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            t.is_pinned = !t.is_pinned;
+            currentTopic = t;
+            renderThread();
+        }
+
+        async function toggleLock(id) {
+            var t = topics.find(function(x) { return x.id === id; });
+            if (!t) return;
+            var { error } = await db.from('discussion_topics').update({ is_locked: !t.is_locked }).eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            t.is_locked = !t.is_locked;
+            currentTopic = t;
+            renderThread();
+        }
+
+        // Posts
+        async function postReply(e) {
+            e.preventDefault();
+            var content = document.getElementById('replyContent').value.trim();
+            if (!content) return;
+
+            var btn = document.getElementById('replyBtn');
+            btn.disabled = true;
+
+            try {
+                var { error } = await db.from('discussion_posts').insert({
+                    topic_id: currentTopic.id,
+                    author_id: profile.id,
+                    content: content
+                });
+                if (error) throw error;
+
+                // Award points for posting
+                if (profile.role === 'student') {
+                    await db.from('forum_points').insert({
+                        student_id: profile.id,
+                        school_id: profile.school_id,
+                        points: 1,
+                        reason: 'reply',
+                        topic_id: currentTopic.id
+                    });
+                    myPoints++;
+                }
+
+                showToast('Reply posted!', 'success');
+                await openThread(currentTopic.id);
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+            btn.disabled = false;
+        }
+
+        async function deletePost(id) {
+            if (!confirm('Delete this post?')) return;
+            var { error } = await db.from('discussion_posts').delete().eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+            showToast('Post deleted', 'success');
+            await openThread(currentTopic.id);
+        }
+
+        async function markAnswer(id) {
+            var { error } = await db.from('discussion_posts').update({ is_answer: true }).eq('id', id);
+            if (error) { showToast(error.message, 'error'); return; }
+
+            // Award bonus points to the post author
+            var post = currentPosts.find(function(p) { return p.id === id; });
+            if (post && post.profiles && post.profiles.role === 'student') {
+                await db.from('forum_points').insert({
+                    student_id: post.author_id,
+                    school_id: profile.school_id,
+                    points: 5,
+                    reason: 'accepted_answer',
+                    topic_id: currentTopic.id
+                });
+            }
+
+            showToast('Marked as answer! +5 points awarded.', 'success');
+            await openThread(currentTopic.id);
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        // =============================================
+        // @Mention Tagging System
+        // =============================================
+        var mentionActive = false;
+        var mentionStart = -1; // cursor position of the '@'
+        var mentionSelectedIdx = 0;
+
+        function handleMentionInput(e) {
+            var ta = e.target;
+            var val = ta.value;
+            var cursor = ta.selectionStart;
+
+            // Find the last '@' before cursor that isn't preceded by a word char
+            var searchFrom = val.lastIndexOf('@', cursor - 1);
+            if (searchFrom < 0) { closeMentionDropdown(); return; }
+
+            // Ensure '@' is at start or preceded by whitespace/newline
+            if (searchFrom > 0 && /\S/.test(val.charAt(searchFrom - 1))) { closeMentionDropdown(); return; }
+
+            var query = val.substring(searchFrom + 1, cursor);
+
+            // If query contains a newline, the mention is broken
+            if (/\n/.test(query)) { closeMentionDropdown(); return; }
+
+            // Don't show if query is too long (already picked)
+            if (query.length > 40) { closeMentionDropdown(); return; }
+
+            mentionStart = searchFrom;
+            mentionActive = true;
+            mentionSelectedIdx = 0;
+
+            var matches = schoolUsers.filter(function(u) {
+                return u.full_name.toLowerCase().indexOf(query.toLowerCase()) >= 0;
+            }).slice(0, 8);
+
+            var dd = document.getElementById('mentionDropdown');
+            if (!dd) return;
+
+            if (matches.length === 0) {
+                dd.classList.remove('open');
+                return;
+            }
+
+            var html = '';
+            matches.forEach(function(u, i) {
+                var initial = u.full_name.charAt(0).toUpperCase();
+                var roleLabel = u.role === 'teacher' ? 'Teacher' : 'Student';
+                html += '<div class="mention-item' + (i === mentionSelectedIdx ? ' active' : '') + '" data-idx="' + i + '" onmousedown="selectMention(' + i + ')">';
+                html += '<div class="mention-item-avatar">' + initial + '</div>';
+                html += '<div><span class="mention-item-name">' + escapeHtml(u.full_name) + '</span>';
+                html += '<span class="mention-item-role">' + roleLabel + '</span></div>';
+                html += '</div>';
+            });
+            dd.innerHTML = html;
+            dd.classList.add('open');
+
+            // Store matches for keyboard selection
+            dd._matches = matches;
+        }
+
+        function handleMentionKeydown(e) {
+            var dd = document.getElementById('mentionDropdown');
+            if (!dd || !dd.classList.contains('open') || !dd._matches) return;
+
+            var matches = dd._matches;
+            if (matches.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                mentionSelectedIdx = (mentionSelectedIdx + 1) % matches.length;
+                updateMentionHighlight(dd);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                mentionSelectedIdx = (mentionSelectedIdx - 1 + matches.length) % matches.length;
+                updateMentionHighlight(dd);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (mentionActive) {
+                    e.preventDefault();
+                    selectMention(mentionSelectedIdx);
+                }
+            } else if (e.key === 'Escape') {
+                closeMentionDropdown();
+            }
+        }
+
+        function updateMentionHighlight(dd) {
+            var items = dd.querySelectorAll('.mention-item');
+            items.forEach(function(item, i) {
+                item.classList.toggle('active', i === mentionSelectedIdx);
+            });
+            // Scroll active into view
+            if (items[mentionSelectedIdx]) {
+                items[mentionSelectedIdx].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function selectMention(idx) {
+            var dd = document.getElementById('mentionDropdown');
+            if (!dd || !dd._matches || !dd._matches[idx]) return;
+
+            var user = dd._matches[idx];
+            var ta = document.getElementById('replyContent');
+            var val = ta.value;
+            var cursor = ta.selectionStart;
+
+            // Replace from '@' to cursor with '@Full Name '
+            var before = val.substring(0, mentionStart);
+            var after = val.substring(cursor);
+            var mention = '@' + user.full_name + ' ';
+            ta.value = before + mention + after;
+
+            // Move cursor to after mention
+            var newPos = before.length + mention.length;
+            ta.selectionStart = ta.selectionEnd = newPos;
+            ta.focus();
+
+            closeMentionDropdown();
+        }
+
+        function closeMentionDropdown() {
+            mentionActive = false;
+            mentionStart = -1;
+            mentionSelectedIdx = 0;
+            var dd = document.getElementById('mentionDropdown');
+            if (dd) { dd.classList.remove('open'); dd._matches = null; }
+        }
+
+        // Render @mentions as highlighted tags in post content
+        function renderMentions(html) {
+            if (!schoolUsers.length) return html;
+
+            // Build list of all known names (including own) sorted longest-first to avoid partial matches
+            var allNames = schoolUsers.map(function(u) { return u.full_name; });
+            allNames.push(profile.full_name);
+            allNames.sort(function(a, b) { return b.length - a.length; });
+
+            // Replace @Name with highlighted span
+            allNames.forEach(function(name) {
+                // Escape name for regex
+                var escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                var regex = new RegExp('@' + escaped + '(?=\\s|$|<br>|[.,;:!?])', 'gi');
+                html = html.replace(regex, '<span class="mention-tag">@' + escapeHtml(name) + '</span>');
+            });
+
+            return html;
+        }
+
+        init();
+    </script>
+</body>
+</html>

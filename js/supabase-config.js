@@ -81,9 +81,9 @@ async function requireAuth(allowedRoles) {
   const profile = await getCurrentProfile();
   if (!profile) { window.location.href = '/login.html'; return null; }
   if (allowedRoles && !allowedRoles.includes(profile.role)) {
-    window.location.href = profile.role === 'teacher'
-      ? '/teacher-dashboard.html'
-      : '/student-dashboard.html';
+    if (profile.role === 'teacher') window.location.href = '/teacher-dashboard.html';
+    else if (profile.role === 'parent') window.location.href = '/parent-dashboard.html';
+    else window.location.href = '/student-dashboard.html';
     return null;
   }
   return profile;
@@ -127,10 +127,20 @@ function renderNav(profile) {
     links = '<a href="/teacher-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
       + '<a href="/exam-builder.html"><i class="fas fa-plus-circle"></i> Create Exam</a>'
       + '<a href="/teacher-scoresheet.html"><i class="fas fa-chart-bar"></i> Scores</a>'
+      + '<a href="/class-materials.html"><i class="fas fa-folder-open"></i> Materials</a>'
+      + '<a href="/teacher-broadcasts.html"><i class="fas fa-bullhorn"></i> Broadcasts</a>'
+      + '<a href="/discussion-forum.html"><i class="fas fa-comments"></i> Forum</a>'
       + '<a href="/teacher-profile.html"><i class="fas fa-user-cog"></i> Profile</a>';
   } else if (profile && profile.role === 'student') {
     links = '<a href="/student-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
-      + '<a href="/student-dashboard.html#results"><i class="fas fa-poll"></i> My Results</a>';
+      + '<a href="/student-dashboard.html#results"><i class="fas fa-poll"></i> My Results</a>'
+      + '<a href="/class-materials.html"><i class="fas fa-folder-open"></i> Materials</a>'
+      + '<a href="/discussion-forum.html"><i class="fas fa-comments"></i> Forum</a>';
+  } else if (profile && profile.role === 'parent') {
+    links = '<a href="/parent-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
+      + '<a href="/parent-dashboard.html#results"><i class="fas fa-poll"></i> Results</a>'
+      + '<a href="/class-materials.html"><i class="fas fa-folder-open"></i> Materials</a>'
+      + '<a href="/discussion-forum.html"><i class="fas fa-comments"></i> Forum</a>';
   }
 
   nav.innerHTML =

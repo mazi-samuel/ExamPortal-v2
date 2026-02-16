@@ -70,7 +70,9 @@
             font-family: 'Comic Neue', cursive;
             background: white;
             cursor: pointer;
-            min-width: 200px;
+            min-width: 0;
+            width: 200px;
+            max-width: 100%;
         }
 
         .controls select:focus {
@@ -348,11 +350,41 @@
         }
 
         @media (max-width: 768px) {
-            .container { padding: 20px; }
+            body { padding: 10px; }
+            .container { padding: 20px; border-radius: 18px; }
             .header h1 { font-size: 1.6rem; }
-            .controls { flex-direction: column; }
-            .controls select { width: 100%; }
+            .header p { font-size: .95rem; }
+            .controls { flex-direction: column; align-items: stretch; }
+            .controls select { width: 100%; min-width: 0; }
+            .controls label { text-align: center; }
             .stats { grid-template-columns: repeat(2, 1fr); }
+            .footer { flex-direction: column; align-items: center; }
+            .btn { width: 100%; max-width: 300px; justify-content: center; }
+            table { min-width: 700px; }
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 6px; }
+            .container { padding: 14px; border-radius: 14px; }
+            .header h1 { font-size: 1.3rem; }
+            .header p { font-size: .85rem; }
+            .stats { grid-template-columns: 1fr; gap: 10px; }
+            .stat-card { padding: 14px; }
+            .stat-card .stat-number { font-size: 1.6rem; }
+            table { min-width: 580px; }
+            thead th { padding: 10px 6px; font-size: .82rem; }
+            tbody td { padding: 8px 6px; font-size: .85rem; }
+            .controls { padding: 14px; gap: 10px; }
+        }
+
+        @media (max-width: 360px) {
+            .container { padding: 10px; }
+            .header h1 { font-size: 1.15rem; }
+            .stats { gap: 8px; }
+            .stat-card .stat-number { font-size: 1.4rem; }
+            table { min-width: 480px; }
+            thead th { font-size: .78rem; padding: 8px 4px; }
+            tbody td { font-size: .8rem; padding: 6px 4px; }
         }
     </style>
 </head>

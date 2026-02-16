@@ -42,6 +42,9 @@
                 <a href="/signup.html?role=teacher" class="btn btn-success btn-lg">
                     <i class="fas fa-chalkboard-teacher"></i> I'm a Teacher
                 </a>
+                <a href="/signup.html?role=parent" class="btn btn-info btn-lg">
+                    <i class="fas fa-user-friends"></i> I'm a Parent
+                </a>
             </div>
         </section>
 
@@ -74,9 +77,19 @@
                     <p>Teachers upload signatures that appear on official student report cards.</p>
                 </div>
                 <div class="feature-card">
-                    <i class="fas fa-download"></i>
-                    <h3>Export & Print</h3>
-                    <p>Download score sheets as CSV, print beautiful report cards with one click.</p>
+                    <i class="fas fa-user-friends"></i>
+                    <h3>Parent Portal</h3>
+                    <p>Parents view child's performance, exam results, and receive school notifications in real-time.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-comments"></i>
+                    <h3>Discussion Forum</h3>
+                    <p>Students discuss topics, answer questions, and earn activity points on the leaderboard.</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-folder-open"></i>
+                    <h3>Weekly Modules</h3>
+                    <p>Class notes, slides, PDFs, audio & video materials organized by week with summaries.</p>
                 </div>
             </div>
         </section>
@@ -118,9 +131,9 @@
         (async function() {
             const profile = await getCurrentProfile();
             if (profile) {
-                window.location.href = profile.role === 'teacher'
-                    ? '/teacher-dashboard.html'
-                    : '/student-dashboard.html';
+                if (profile.role === 'teacher') window.location.href = '/teacher-dashboard.html';
+                else if (profile.role === 'parent') window.location.href = '/parent-dashboard.html';
+                else window.location.href = '/student-dashboard.html';
             }
         })();
     </script>
