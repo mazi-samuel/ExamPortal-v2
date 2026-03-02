@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Term Report Card - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        .report-card { background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.1); max-width: 800px; margin: 0 auto; }
+        .report-header { text-align: center; border-bottom: 3px solid #667eea; padding-bottom: 16px; margin-bottom: 20px; }
+        .report-header h1 { margin: 0; font-size: 1.4rem; color: #333; }
+        .report-header .school-name { font-size: 1.6rem; color: #667eea; font-family: 'Fredoka One', sans-serif; }
+        .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; font-size: .9rem; }
+        .student-info dt { font-weight: bold; color: #555; }
+        .student-info dd { margin: 0; }
+        .results-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .results-table th, .results-table td { border: 1px solid #ddd; padding: 8px 10px; text-align: center; }
+        .results-table th { background: #667eea; color: #fff; font-weight: 700; }
+        .results-table tr:nth-child(even) { background: #f8f9ff; }
+        .results-table .subject-col { text-align: left; font-weight: 600; }
+        .results-table .total-row { background: #e8ecff !important; font-weight: 700; }
+        .grade-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: .75rem; font-weight: 700; }
+        .grade-a { background: #d4edda; color: #155724; }
+        .grade-b { background: #cce5ff; color: #004085; }
+        .grade-c { background: #fff3cd; color: #856404; }
+        .grade-d { background: #ffeeba; color: #856404; }
+        .grade-f { background: #f8d7da; color: #721c24; }
+        .report-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 20px; }
+        .summary-item { text-align: center; padding: 12px; border-radius: 8px; background: #f0f2ff; }
+        .summary-item .val { font-size: 1.5rem; font-weight: 700; color: #667eea; }
+        .summary-item .lbl { font-size: .8rem; color: #666; }
+        @media print {
+            .portal-nav, .no-print, .page-wrap { padding: 0 !important; }
+            .report-card { box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading report card...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        var profile = null;
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'admin', 'school_admin', 'parent', 'student']);
+            if (!profile) return;
+            renderNav(profile);
+
+            // Determine which student to show
+            var params = new URLSearchParams(window.location.search);
+            var studentId = params.get('student_id');
+            var termId = params.get('term_id');
+            var sessionId = params.get('session_id');
+
+            // If student viewing own report
+            if (!studentId && profile.role === 'student') studentId = profile.id;
+
+            if (!studentId || !termId) {
+                renderStudentPicker(termId);
+                return;
+            }
+
+            await loadReport(studentId, termId, sessionId);
+        }
+
+        function renderStudentPicker(termId) {
+            var el = document.getElementById('mainContent');
+            var html = '<div class="d-flex justify-between align-center mb-3">';
+            html += '<div><h1><i class="fas fa-file-alt"></i> Term Report Card</h1>';
+            html += '<p class="subtitle">Select student and term to view report</p></div></div>';
+
+            html += '<div class="card" style="max-width:500px;margin:0 auto">';
+            html += '<div class="form-group"><label>Student</label>';
+            html += '<select id="pickStudent" class="form-control"><option value="">Loading...</option></select></div>';
+            html += '<div class="form-group"><label>Term</label>';
+            html += '<select id="pickTerm" class="form-control"><option value="">Loading...</option></select></div>';
+            html += '<button class="btn btn-primary btn-block" onclick="goToReport()"><i class="fas fa-eye"></i> View Report</button>';
+            html += '</div>';
+            el.innerHTML = html;
+
+            // Load students & terms
+            loadPickerData();
+        }
+
+        async function loadPickerData() {
+            // Students
+            var { data: students } = await db.from('profiles')
+                .select('id, full_name, class')
+                .eq('school_id', profile.school_id)
+                .eq('role', 'student')
+                .order('full_name');
+            var sSel = document.getElementById('pickStudent');
+            sSel.innerHTML = '<option value="">-- Select Student --</option>';
+            (students || []).forEach(function(s) {
+                var o = document.createElement('option');
+                o.value = s.id;
+                o.textContent = s.full_name + ' (' + getClassLabel(s.class) + ')';
+                sSel.appendChild(o);
+            });
+
+            // Terms
+            var { data: terms } = await db.from('term_config')
+                .select('*')
+                .eq('school_id', profile.school_id)
+                .order('start_date', { ascending: false });
+            var tSel = document.getElementById('pickTerm');
+            tSel.innerHTML = '<option value="">-- Select Term --</option>';
+            (terms || []).forEach(function(t) {
+                var o = document.createElement('option');
+                o.value = t.id;
+                o.textContent = t.name + (t.session_id ? '' : '');
+                tSel.appendChild(o);
+            });
+        }
+
+        function goToReport() {
+            var sid = document.getElementById('pickStudent').value;
+            var tid = document.getElementById('pickTerm').value;
+            if (!sid || !tid) { showToast('Select student & term', 'warning'); return; }
+            window.location.href = '/term-report.html?student_id=' + sid + '&term_id=' + tid;
+        }
+
+        async function loadReport(studentId, termId, sessionId) {
+            var el = document.getElementById('mainContent');
+            try {
+                var report = await API.termResults.report(studentId, termId, sessionId);
+                renderReport(el, report);
+            } catch (err) {
+                el.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Could not load report</h3><p>' + escapeHtml(err.message) + '</p></div>';
+            }
+        }
+
+        function renderReport(el, r) {
+            var student = r.student || {};
+            var schoolName = (student.schools && student.schools.name) ? student.schools.name : 'School';
+            var results = r.results || [];
+            var summary = r.summary || {};
+
+            var html = '<div class="no-print d-flex justify-between align-center mb-3">';
+            html += '<div><h1><i class="fas fa-file-alt"></i> Term Report Card</h1></div>';
+            html += '<div class="btn-group">';
+            html += '<button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>';
+            html += '<a href="/term-report.html" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>';
+            html += '</div></div>';
+
+            html += '<div class="report-card">';
+
+            // Header
+            html += '<div class="report-header">';
+            html += '<div class="school-name"><i class="fas fa-graduation-cap"></i> ' + escapeHtml(schoolName) + '</div>';
+            html += '<h1>Academic Report Card</h1>';
+            html += '<p style="margin:4px 0 0;color:#666;font-size:.9rem">' + (r.term_name || 'Term') + ' — ' + (r.session_name || '') + '</p>';
+            html += '</div>';
+
+            // Student Info
+            html += '<dl class="student-info">';
+            html += '<dt>Student Name</dt><dd>' + escapeHtml(student.full_name || '') + '</dd>';
+            html += '<dt>Class</dt><dd>' + getClassLabel(student.class || '') + '</dd>';
+            html += '<dt>Admission No.</dt><dd>' + escapeHtml(student.admission_number || 'N/A') + '</dd>';
+            html += '<dt>Position</dt><dd>' + (summary.position || '-') + '</dd>';
+            html += '</dl>';
+
+            // Results Table
+            html += '<table class="results-table">';
+            html += '<thead><tr><th class="subject-col">Subject</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th><th>Remark</th></tr></thead>';
+            html += '<tbody>';
+            var totalObtained = 0;
+            var totalMax = 0;
+            results.forEach(function(row) {
+                var grade = getGradeLetter(row.total_percentage || 0);
+                var gc = getGradeClass(grade);
+                html += '<tr>';
+                html += '<td class="subject-col">' + escapeHtml(row.subject_name || '') + '</td>';
+                html += '<td>' + (row.ca_total != null ? row.ca_total.toFixed(1) : '-') + '</td>';
+                html += '<td>' + (row.exam_score != null ? row.exam_score.toFixed(1) : '-') + '</td>';
+                html += '<td><strong>' + (row.total_score != null ? row.total_score.toFixed(1) : '-') + '</strong></td>';
+                html += '<td><span class="grade-badge ' + gc + '">' + grade + '</span></td>';
+                html += '<td style="font-size:.8rem">' + getRemarkForGrade(grade) + '</td>';
+                html += '</tr>';
+                if (row.total_score != null) { totalObtained += row.total_score; totalMax += 100; }
+            });
+            if (results.length > 0) {
+                var avgPct = totalMax > 0 ? (totalObtained / totalMax * 100) : 0;
+                html += '<tr class="total-row"><td class="subject-col">Overall</td><td colspan="2"></td>';
+                html += '<td>' + totalObtained.toFixed(1) + '/' + totalMax + '</td>';
+                html += '<td><span class="grade-badge ' + getGradeClass(getGradeLetter(avgPct)) + '">' + getGradeLetter(avgPct) + '</span></td>';
+                html += '<td></td></tr>';
+            }
+            html += '</tbody></table>';
+
+            // Summary cards
+            html += '<div class="report-summary">';
+            html += '<div class="summary-item"><div class="val">' + (summary.average != null ? summary.average.toFixed(1) + '%' : '-') + '</div><div class="lbl">Average</div></div>';
+            html += '<div class="summary-item"><div class="val">' + (summary.position || '-') + '</div><div class="lbl">Position</div></div>';
+            html += '<div class="summary-item"><div class="val">' + (summary.total_students || '-') + '</div><div class="lbl">Class Size</div></div>';
+            html += '<div class="summary-item"><div class="val">' + results.length + '</div><div class="lbl">Subjects</div></div>';
+            html += '</div>';
+
+            html += '</div>'; // report-card
+            el.innerHTML = html;
+        }
+
+        function getRemarkForGrade(g) {
+            if (g === 'A+') return 'Excellent';
+            if (g === 'A') return 'Very Good';
+            if (g === 'B') return 'Good';
+            if (g === 'C') return 'Average';
+            if (g === 'D') return 'Below Average';
+            return 'Needs Improvement';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var el = document.createElement('span');
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

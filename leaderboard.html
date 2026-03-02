@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard & Badges - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        .lb-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #f0f0f0; transition: background .15s; }
+        .lb-row:hover { background: #f8f9ff; }
+        .lb-rank { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .9rem; }
+        .lb-rank.gold { background: #FFD700; color: #7c6200; }
+        .lb-rank.silver { background: #C0C0C0; color: #555; }
+        .lb-rank.bronze { background: #CD7F32; color: #fff; }
+        .lb-rank.normal { background: #f0f2ff; color: #667eea; }
+        .lb-name { flex: 1; font-weight: 600; }
+        .lb-points { font-size: 1.1rem; font-weight: 700; color: #667eea; }
+        .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+        .badge-card { text-align: center; padding: 16px 10px; border-radius: 12px; background: #f8f9ff; border: 2px solid transparent; transition: all .2s; }
+        .badge-card.earned { border-color: #667eea; background: #e8ecff; }
+        .badge-card .badge-icon { font-size: 2.2rem; margin-bottom: 6px; }
+        .badge-card .badge-name { font-size: .85rem; font-weight: 700; }
+        .badge-card .badge-desc { font-size: .7rem; color: #888; margin-top: 2px; }
+        .points-display { text-align: center; padding: 24px; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-radius: 16px; margin-bottom: 20px; }
+        .points-display .pts-value { font-size: 3rem; font-weight: 700; font-family: 'Fredoka One', sans-serif; }
+        .points-display .pts-label { font-size: .9rem; opacity: .9; }
+    </style>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading gamification...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        var profile = null;
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'admin', 'school_admin', 'student', 'parent']);
+            if (!profile) return;
+            renderNav(profile);
+
+            if (profile.role === 'student') {
+                await renderStudentGamification();
+            } else {
+                await renderTeacherGamification();
+            }
+        }
+
+        // ========== STUDENT VIEW ==========
+        async function renderStudentGamification() {
+            var el = document.getElementById('mainContent');
+            el.innerHTML = '<div class="page-loader"><div class="loader"></div></div>';
+
+            var myPoints = 0;
+            var myBadges = [];
+            var leaderboard = [];
+
+            try { var ptData = await API.gamification.myPoints(); myPoints = ptData.total || ptData || 0; } catch(_) {}
+            try { myBadges = await API.gamification.studentBadges(profile.id); if (!Array.isArray(myBadges)) myBadges = []; } catch(_) {}
+            try { leaderboard = await API.gamification.leaderboard(profile.class, 'term', 20); if (!Array.isArray(leaderboard)) leaderboard = []; } catch(_) {}
+
+            var html = '<div class="mb-3"><h1><i class="fas fa-trophy"></i> Achievements</h1></div>';
+
+            // Points display
+            html += '<div class="points-display"><div class="pts-value">' + myPoints + '</div><div class="pts-label"><i class="fas fa-star"></i> Total Points Earned</div></div>';
+
+            // Tabs
+            html += '<div class="tabs mb-3">';
+            html += '<button class="tab-btn active" onclick="switchTab(\'leaderboard\', this)"><i class="fas fa-crown"></i> Leaderboard</button>';
+            html += '<button class="tab-btn" onclick="switchTab(\'badges\', this)"><i class="fas fa-medal"></i> Badges</button>';
+            html += '</div>';
+
+            // Leaderboard tab
+            html += '<div class="tab-content active" id="tab-leaderboard">';
+            html += '<div class="card">';
+            if (leaderboard.length === 0) {
+                html += '<div class="empty-state" style="padding:30px"><p>No leaderboard data yet.</p></div>';
+            } else {
+                leaderboard.forEach(function(entry, i) {
+                    var rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal';
+                    var isMe = entry.student_id === profile.id;
+                    html += '<div class="lb-row"' + (isMe ? ' style="background:#f0f2ff"' : '') + '>';
+                    html += '<div class="lb-rank ' + rankClass + '">' + (i + 1) + '</div>';
+                    html += '<div class="lb-name">' + escapeHtml(entry.student_name || entry.full_name || 'Student') + (isMe ? ' <span style="font-size:.8rem;color:#667eea">(You)</span>' : '') + '</div>';
+                    html += '<div class="lb-points">' + (entry.points || entry.total_points || 0) + ' <i class="fas fa-star" style="font-size:.8rem"></i></div>';
+                    html += '</div>';
+                });
+            }
+            html += '</div></div>';
+
+            // Badges tab
+            html += '<div class="tab-content" id="tab-badges">';
+            html += '<div class="badge-grid">';
+            if (myBadges.length === 0) {
+                html += '<div class="empty-state" style="grid-column:1/-1;padding:30px"><p>Keep working to earn badges!</p></div>';
+            } else {
+                myBadges.forEach(function(b) {
+                    html += '<div class="badge-card earned">';
+                    html += '<div class="badge-icon">' + (b.icon || '🏅') + '</div>';
+                    html += '<div class="badge-name">' + escapeHtml(b.name || b.badge_name) + '</div>';
+                    if (b.description) html += '<div class="badge-desc">' + escapeHtml(b.description) + '</div>';
+                    html += '</div>';
+                });
+            }
+            html += '</div></div>';
+
+            el.innerHTML = html;
+        }
+
+        // ========== TEACHER VIEW ==========
+        async function renderTeacherGamification() {
+            var el = document.getElementById('mainContent');
+            var html = '';
+
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-trophy"></i> Gamification Manager</h1>';
+            html += '<p class="subtitle">Award points and manage badges</p></div></div>';
+
+            // Class & leaderboard
+            html += '<div class="card mb-3"><div class="d-flex flex-wrap gap-2 align-center">';
+            html += '<select class="form-control" style="max-width:180px" id="lbClass" onchange="loadTeacherLeaderboard()">';
+            CLASS_OPTIONS.forEach(function(c) { html += '<option value="' + c.value + '">' + c.label + '</option>'; });
+            html += '</select>';
+            html += '<select class="form-control" style="max-width:140px" id="lbPeriod" onchange="loadTeacherLeaderboard()">';
+            ['term','month','week','all_time'].forEach(function(p) { html += '<option value="' + p + '">' + p.replace('_', ' ') + '</option>'; });
+            html += '</select>';
+            html += '</div></div>';
+
+            // Award section
+            html += '<div class="card mb-3"><h3><i class="fas fa-gift"></i> Award Points</h3>';
+            html += '<div class="d-flex flex-wrap gap-2 align-center">';
+            html += '<select class="form-control" style="max-width:200px" id="awardStudent"><option value="">-- Student --</option></select>';
+            html += '<input type="number" class="form-control" style="max-width:100px" id="awardPoints" value="10" min="1" max="1000" placeholder="Points">';
+            html += '<input type="text" class="form-control" style="max-width:200px" id="awardReason" placeholder="Reason">';
+            html += '<button class="btn btn-success" onclick="awardPoints()"><i class="fas fa-plus-circle"></i> Award</button>';
+            html += '</div></div>';
+
+            html += '<div id="teacherLbContent"></div>';
+            el.innerHTML = html;
+
+            // Populate student select
+            var { data: students } = await db.from('profiles')
+                .select('id, full_name, class')
+                .eq('school_id', profile.school_id)
+                .eq('role', 'student')
+                .order('full_name');
+            var sel = document.getElementById('awardStudent');
+            (students || []).forEach(function(s) {
+                var o = document.createElement('option');
+                o.value = s.id;
+                o.textContent = s.full_name + ' (' + getClassLabel(s.class) + ')';
+                sel.appendChild(o);
+            });
+
+            loadTeacherLeaderboard();
+        }
+
+        async function loadTeacherLeaderboard() {
+            var cls = document.getElementById('lbClass').value;
+            var period = document.getElementById('lbPeriod').value;
+            var container = document.getElementById('teacherLbContent');
+            container.innerHTML = '<div class="page-loader" style="padding:20px"><div class="loader"></div></div>';
+
+            try {
+                var lb = await API.gamification.leaderboard(cls, period, 30);
+                if (!Array.isArray(lb)) lb = [];
+                var html = '<div class="card"><h3><i class="fas fa-crown"></i> Leaderboard — ' + getClassLabel(cls) + '</h3>';
+                if (lb.length === 0) {
+                    html += '<p class="text-muted">No data yet.</p>';
+                } else {
+                    lb.forEach(function(entry, i) {
+                        var rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal';
+                        html += '<div class="lb-row">';
+                        html += '<div class="lb-rank ' + rankClass + '">' + (i + 1) + '</div>';
+                        html += '<div class="lb-name">' + escapeHtml(entry.student_name || entry.full_name || 'Student') + '</div>';
+                        html += '<div class="lb-points">' + (entry.points || entry.total_points || 0) + ' pts</div>';
+                        html += '</div>';
+                    });
+                }
+                html += '</div>';
+                container.innerHTML = html;
+            } catch (err) {
+                container.innerHTML = '<p class="text-muted">' + escapeHtml(err.message) + '</p>';
+            }
+        }
+
+        async function awardPoints() {
+            var studentId = document.getElementById('awardStudent').value;
+            var points = parseInt(document.getElementById('awardPoints').value) || 0;
+            var reason = document.getElementById('awardReason').value.trim();
+            if (!studentId || !points) { showToast('Select student and enter points', 'warning'); return; }
+            try {
+                await API.gamification.award({ student_id: studentId, points: points, reason: reason || 'Teacher award' });
+                showToast(points + ' points awarded!', 'success');
+                document.getElementById('awardReason').value = '';
+                loadTeacherLeaderboard();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // --- Tabs ---
+        function switchTab(name, btn) {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            btn.classList.add('active');
+            var tc = document.getElementById('tab-' + name);
+            if (tc) tc.classList.add('active');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var el = document.createElement('span');
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

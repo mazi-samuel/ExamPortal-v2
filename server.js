@@ -4,17 +4,23 @@ const path = require('path');
 const morgan = require('morgan');
 const cors = require('cors');
 
+// Load .env if present (won't fail if file missing)
+try { require('dotenv').config(); } catch (_) { /* dotenv not installed yet */ }
+
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const logger = require('./utils/logger');
+
 const app = express();
 const PORT = process.env.PORT || 5510;
 const DATA_DIR = path.join(__dirname, 'data');
 const RESULTS_FILE = path.join(DATA_DIR, 'results.json');
 
+// ---------- Global Middleware ----------
 app.use(morgan('dev'));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 // ---------- Landing page redirect ----------
-// Serve login.html as the default landing page (send users straight to login)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
@@ -22,7 +28,22 @@ app.get('/', (req, res) => {
 // ---------- Serve static files ----------
 app.use('/', express.static(path.join(__dirname)));
 
-// ---------- Legacy API (kept for backward compatibility) ----------
+// ============================================================
+//  V2 API Routes (new modular endpoints)
+// ============================================================
+app.use('/api/v2/assessments',   require('./routes/assessments'));
+app.use('/api/v2/term-results',  require('./routes/termResults'));
+app.use('/api/v2/assignments',   require('./routes/assignments'));
+app.use('/api/v2/attendance',    require('./routes/attendance'));
+app.use('/api/v2/notifications', require('./routes/notifications'));
+app.use('/api/v2/question-bank', require('./routes/questionBank'));
+app.use('/api/v2/analytics',     require('./routes/analytics'));
+app.use('/api/v2/messages',      require('./routes/messaging'));
+app.use('/api/v2/gamification',  require('./routes/gamification'));
+
+// ============================================================
+//  Legacy API (kept for backward compatibility)
+// ============================================================
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(RESULTS_FILE)) fs.writeFileSync(RESULTS_FILE, '[]', 'utf8');
 
@@ -48,7 +69,13 @@ app.delete('/api/results', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Error Handling ----------
+app.use('/api', notFoundHandler);
+app.use(errorHandler);
+
+// ---------- Start ----------
 app.listen(PORT, () => {
+  logger.info(`ExamPortal running at http://localhost:${PORT}`);
   console.log(`\n  ExamPortal running at http://localhost:${PORT}\n`);
   console.log(`  Login:        http://localhost:${PORT}/login.html`);
   console.log(`  Portal:       http://localhost:${PORT}/`);
@@ -58,5 +85,6 @@ app.listen(PORT, () => {
   console.log(`  Parent:       http://localhost:${PORT}/parent-dashboard.html`);
   console.log(`  Materials:    http://localhost:${PORT}/class-materials.html`);
   console.log(`  Forum:        http://localhost:${PORT}/discussion-forum.html`);
-  console.log(`  Broadcasts:   http://localhost:${PORT}/teacher-broadcasts.html\n`);
+  console.log(`  Broadcasts:   http://localhost:${PORT}/teacher-broadcasts.html`);
+  console.log(`  API v2:       http://localhost:${PORT}/api/v2\n`);
 });

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Assessment - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading assessments...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create / Edit Assessment Modal -->
+    <div class="modal-overlay" id="assessmentModal" style="display:none">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="assessmentModalTitle">Create Assessment</h2>
+                <button class="modal-close" onclick="closeAssessmentModal()">&times;</button>
+            </div>
+            <form onsubmit="saveAssessment(event)">
+                <input type="hidden" id="editAssessmentId">
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" id="assessmentTitle" class="form-control" placeholder="e.g. First CA Test" required>
+                </div>
+                <div class="form-group">
+                    <label>Type *</label>
+                    <select id="assessmentType" class="form-control" required>
+                        <option value="test">Test</option>
+                        <option value="assignment">Assignment</option>
+                        <option value="project">Project</option>
+                        <option value="classwork">Classwork</option>
+                        <option value="homework">Homework</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Subject *</label>
+                    <select id="assessmentSubject" class="form-control" required>
+                        <option value="">-- Choose --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Class *</label>
+                    <select id="assessmentClass" class="form-control" required>
+                        <option value="">-- Choose --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Max Score</label>
+                    <input type="number" id="assessmentMaxScore" class="form-control" value="20" min="1" max="1000">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="assessmentDescription" class="form-control" rows="2" placeholder="Optional description"></textarea>
+                </div>
+                <button type="submit" class="btn btn-success btn-block"><i class="fas fa-save"></i> Save Assessment</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Score Entry Modal -->
+    <div class="modal-overlay" id="scoreModal" style="display:none">
+        <div class="modal" style="max-width:700px">
+            <div class="modal-header">
+                <h2 id="scoreModalTitle">Enter Scores</h2>
+                <button class="modal-close" onclick="closeScoreModal()">&times;</button>
+            </div>
+            <div id="scoreContent"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        var profile = null;
+        var subjects = [];
+        var assessments = [];
+        var currentFilter = { class: '', subject_id: '', type: '' };
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'admin', 'school_admin']);
+            if (!profile) return;
+            renderNav(profile);
+            await loadSubjects();
+            populateSelects();
+            await loadAssessments();
+            renderPage();
+        }
+
+        async function loadSubjects() {
+            var q = db.from('subjects').select('*').eq('school_id', profile.school_id);
+            if (profile.assigned_class) q = q.eq('class', profile.assigned_class);
+            var { data } = await q.order('class').order('name');
+            subjects = data || [];
+        }
+
+        function populateSelects() {
+            var subSel = document.getElementById('assessmentSubject');
+            var clsSel = document.getElementById('assessmentClass');
+            subjects.forEach(function(s) {
+                var o = document.createElement('option');
+                o.value = s.id;
+                o.textContent = s.name + ' (' + getClassLabel(s.class) + ')';
+                subSel.appendChild(o);
+            });
+            CLASS_OPTIONS.forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c.value;
+                o.textContent = c.label;
+                clsSel.appendChild(o);
+            });
+        }
+
+        async function loadAssessments() {
+            try {
+                assessments = await API.assessments.list(currentFilter);
+            } catch (e) {
+                // Fallback: load from Supabase directly
+                var q = db.from('assessments').select('*, subjects(name)')
+                    .eq('school_id', profile.school_id)
+                    .order('created_at', { ascending: false });
+                if (currentFilter.class) q = q.eq('class', currentFilter.class);
+                if (currentFilter.subject_id) q = q.eq('subject_id', currentFilter.subject_id);
+                if (currentFilter.type) q = q.eq('assessment_type', currentFilter.type);
+                var { data } = await q;
+                assessments = data || [];
+            }
+        }
+
+        function renderPage() {
+            var el = document.getElementById('mainContent');
+            var html = '';
+
+            // Header
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-clipboard-check"></i> Continuous Assessment</h1>';
+            html += '<p class="subtitle">Manage CA tests, assignments, and project scores</p></div>';
+            html += '<button class="btn btn-success" onclick="openAssessmentModal()"><i class="fas fa-plus-circle"></i> New Assessment</button>';
+            html += '</div>';
+
+            // Filters
+            html += '<div class="card mb-3"><div class="d-flex flex-wrap gap-2 align-center">';
+            html += '<select class="form-control" style="max-width:200px" onchange="filterClass(this.value)">';
+            html += '<option value="">All Classes</option>';
+            CLASS_OPTIONS.forEach(function(c) {
+                html += '<option value="' + c.value + '"' + (currentFilter.class === c.value ? ' selected' : '') + '>' + c.label + '</option>';
+            });
+            html += '</select>';
+            html += '<select class="form-control" style="max-width:200px" onchange="filterType(this.value)">';
+            html += '<option value="">All Types</option>';
+            ['test','assignment','project','classwork','homework'].forEach(function(t) {
+                html += '<option value="' + t + '"' + (currentFilter.type === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
+            });
+            html += '</select>';
+            html += '</div></div>';
+
+            // Assessment list
+            if (assessments.length === 0) {
+                html += '<div class="empty-state"><i class="fas fa-clipboard"></i><h3>No assessments yet</h3>';
+                html += '<p>Create your first CA assessment to start recording scores.</p>';
+                html += '<button class="btn btn-primary mt-2" onclick="openAssessmentModal()"><i class="fas fa-plus"></i> Create Assessment</button></div>';
+            } else {
+                html += '<div class="grid grid-3">';
+                assessments.forEach(function(a) {
+                    var subjectName = (a.subjects && a.subjects.name) ? a.subjects.name : 'N/A';
+                    var typeColor = getTypeColor(a.assessment_type);
+                    html += '<div class="card">';
+                    html += '<div class="d-flex justify-between align-center mb-2">';
+                    html += '<span style="background:' + typeColor + ';color:#fff;padding:2px 10px;border-radius:10px;font-size:.75rem">' + a.assessment_type.toUpperCase() + '</span>';
+                    html += '<span class="text-muted" style="font-size:.8rem">' + getClassLabel(a.class) + '</span>';
+                    html += '</div>';
+                    html += '<h3 style="margin:0 0 4px 0">' + escapeHtml(a.title) + '</h3>';
+                    html += '<p class="text-muted" style="font-size:.85rem;margin:0 0 8px 0"><i class="fas fa-book"></i> ' + subjectName + ' &bull; Max: ' + a.max_score + '</p>';
+                    if (a.description) html += '<p style="font-size:.8rem;color:#666;margin:0 0 8px 0">' + escapeHtml(a.description) + '</p>';
+                    html += '<div class="d-flex gap-2">';
+                    html += '<button class="btn btn-sm btn-primary" onclick="openScoreEntry(\'' + a.id + '\')"><i class="fas fa-edit"></i> Scores</button>';
+                    html += '<button class="btn btn-sm btn-info" onclick="editAssessment(\'' + a.id + '\')"><i class="fas fa-cog"></i></button>';
+                    html += '<button class="btn btn-sm btn-danger" onclick="deleteAssessment(\'' + a.id + '\')"><i class="fas fa-trash"></i></button>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            el.innerHTML = html;
+        }
+
+        function getTypeColor(type) {
+            var colors = { test: '#667eea', assignment: '#f5a623', project: '#43b581', classwork: '#7289da', homework: '#e67e22' };
+            return colors[type] || '#667eea';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var el = document.createElement('span');
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        // --- Filter ---
+        async function filterClass(v) { currentFilter.class = v; await loadAssessments(); renderPage(); }
+        async function filterType(v) { currentFilter.type = v; await loadAssessments(); renderPage(); }
+
+        // --- Assessment CRUD ---
+        function openAssessmentModal(data) {
+            document.getElementById('editAssessmentId').value = data ? data.id : '';
+            document.getElementById('assessmentTitle').value = data ? data.title : '';
+            document.getElementById('assessmentType').value = data ? data.assessment_type : 'test';
+            document.getElementById('assessmentSubject').value = data ? data.subject_id : '';
+            document.getElementById('assessmentClass').value = data ? data.class : '';
+            document.getElementById('assessmentMaxScore').value = data ? data.max_score : 20;
+            document.getElementById('assessmentDescription').value = data ? (data.description || '') : '';
+            document.getElementById('assessmentModalTitle').textContent = data ? 'Edit Assessment' : 'Create Assessment';
+            document.getElementById('assessmentModal').style.display = 'flex';
+        }
+        function closeAssessmentModal() { document.getElementById('assessmentModal').style.display = 'none'; }
+
+        async function saveAssessment(e) {
+            e.preventDefault();
+            var id = document.getElementById('editAssessmentId').value;
+            var payload = {
+                title: document.getElementById('assessmentTitle').value.trim(),
+                assessment_type: document.getElementById('assessmentType').value,
+                subject_id: document.getElementById('assessmentSubject').value,
+                class: document.getElementById('assessmentClass').value,
+                max_score: parseInt(document.getElementById('assessmentMaxScore').value) || 20,
+                description: document.getElementById('assessmentDescription').value.trim()
+            };
+            try {
+                if (id) {
+                    await API.assessments.update(id, payload);
+                    showToast('Assessment updated!', 'success');
+                } else {
+                    await API.assessments.create(payload);
+                    showToast('Assessment created!', 'success');
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+                return;
+            }
+            closeAssessmentModal();
+            await loadAssessments();
+            renderPage();
+        }
+
+        function editAssessment(id) {
+            var a = assessments.find(function(x) { return x.id === id; });
+            if (a) openAssessmentModal(a);
+        }
+
+        async function deleteAssessment(id) {
+            if (!confirm('Delete this assessment? Scores will be lost.')) return;
+            try {
+                await API.assessments.remove(id);
+                showToast('Assessment deleted', 'success');
+                await loadAssessments();
+                renderPage();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // --- Score Entry ---
+        async function openScoreEntry(assessmentId) {
+            var a = assessments.find(function(x) { return x.id === assessmentId; });
+            if (!a) return;
+            document.getElementById('scoreModalTitle').textContent = 'Scores — ' + a.title;
+
+            // Load students for this class
+            var { data: students } = await db.from('profiles')
+                .select('id, full_name, admission_number')
+                .eq('school_id', profile.school_id)
+                .eq('role', 'student')
+                .eq('class', a.class)
+                .order('full_name');
+            students = students || [];
+
+            // Load existing scores
+            var existingScores = [];
+            try {
+                existingScores = await API.assessments.getScores(assessmentId);
+            } catch (_) {}
+            var scoreMap = {};
+            (Array.isArray(existingScores) ? existingScores : []).forEach(function(s) { scoreMap[s.student_id] = s.score; });
+
+            var html = '<form onsubmit="saveScores(event, \'' + assessmentId + '\')">';
+            html += '<div style="max-height:400px;overflow-y:auto">';
+            html += '<table class="table"><thead><tr><th>#</th><th>Student</th><th>Score (/' + a.max_score + ')</th></tr></thead><tbody>';
+            students.forEach(function(st, i) {
+                var existing = scoreMap[st.id] !== undefined ? scoreMap[st.id] : '';
+                html += '<tr>';
+                html += '<td>' + (i + 1) + '</td>';
+                html += '<td>' + escapeHtml(st.full_name) + '</td>';
+                html += '<td><input type="number" class="form-control score-input" data-student="' + st.id + '" value="' + existing + '" min="0" max="' + a.max_score + '" style="width:80px" placeholder="-"></td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            if (students.length === 0) {
+                html += '<div class="empty-state" style="padding:20px"><p>No students found in ' + getClassLabel(a.class) + '</p></div>';
+            }
+            html += '<button type="submit" class="btn btn-success btn-block mt-2"><i class="fas fa-save"></i> Save All Scores</button>';
+            html += '</form>';
+            document.getElementById('scoreContent').innerHTML = html;
+            document.getElementById('scoreModal').style.display = 'flex';
+        }
+        function closeScoreModal() { document.getElementById('scoreModal').style.display = 'none'; }
+
+        async function saveScores(e, assessmentId) {
+            e.preventDefault();
+            var inputs = document.querySelectorAll('.score-input');
+            var scores = [];
+            inputs.forEach(function(inp) {
+                if (inp.value !== '') {
+                    scores.push({ student_id: inp.dataset.student, score: parseFloat(inp.value) });
+                }
+            });
+            if (scores.length === 0) { showToast('Enter at least one score', 'warning'); return; }
+            try {
+                await API.assessments.saveScores(assessmentId, scores);
+                showToast(scores.length + ' scores saved!', 'success');
+                closeScoreModal();
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // --- Tabs (future) ---
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            event.target.closest('.tab-btn').classList.add('active');
+            var tc = document.getElementById('tab-' + name);
+            if (tc) tc.classList.add('active');
+        }
+
+        init();
+    </script>
+</body>
+</html>
