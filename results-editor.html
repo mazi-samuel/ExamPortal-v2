@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICT Results Manager - Project Scores Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 5px solid #667eea;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+        }
+
+        .info-box h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+
+        .info-box li {
+            margin: 8px 0;
+            color: #333;
+        }
+
+        .info-box li:before {
+            content: "✓ ";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .controls {
+            padding: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .controls label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        select, input[type="search"] {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input[type="search"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        button.secondary:hover {
+            background: #5a6268;
+        }
+
+        button.success {
+            background: #28a745;
+        }
+
+        button.success:hover {
+            background: #218838;
+        }
+
+        button.danger {
+            background: #dc3545;
+        }
+
+        button.danger:hover {
+            background: #c82333;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            padding: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        thead {
+            background: #f8f9fa;
+            border-bottom: 3px solid #667eea;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 700;
+            color: #333;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tbody tr:hover {
+            background: #f5f5f5;
+        }
+
+        .student-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .grade-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        .grade-badge.grade1 {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .grade-badge.grade2 {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .grade-badge.grade3 {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .grade-badge.grade4 {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .grade-badge.grade5 {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .score-input {
+            width: 100px;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+        }
+
+        .score-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+        }
+
+        .score-display {
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-buttons button {
+            padding: 8px 12px;
+            font-size: 0.9em;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .modal-content .form-group {
+            margin-bottom: 20px;
+        }
+
+        .modal-content label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .modal-content input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .modal-content input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 25px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #667eea;
+            text-align: center;
+        }
+
+        .stat-card h4 {
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .success-message {
+            display: none;
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px;
+            border-left: 5px solid #28a745;
+        }
+
+        .success-message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .error-message {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px;
+            border-left: 5px solid #dc3545;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            select, input[type="search"], button {
+                width: 100%;
+            }
+
+            table {
+                font-size: 0.9em;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+
+            .score-input {
+                width: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 ICT Results Manager</h1>
+            <p>Final Term Exam - Project Scores Editor (40% Contribution)</p>
+        </header>
+
+        <div class="info-box">
+            <h3>📌 System Information</h3>
+            <ul>
+                <li><strong>Final Grade Calculation:</strong> Exam Score (60 marks) + Project Score (40 marks) = 100</li>
+                <li><strong>Project Score:</strong> Out of 40 points, represents 40% of final grade</li>
+                <li><strong>Final Percentage:</strong> (Exam Score + Project Score) / 100 × 100%</li>
+                <li><strong>Grade Range:</strong> A (90-100%), B (80-89%), C (70-79%), D (60-69%), E (0-59%)</li>
+                <li><strong>Auto-Save:</strong> All changes are automatically saved to the database</li>
+            </ul>
+        </div>
+
+        <div class="success-message" id="successMsg"></div>
+        <div class="error-message" id="errorMsg"></div>
+
+        <div class="controls">
+            <label for="gradeFilter">Filter by Grade:</label>
+            <select id="gradeFilter">
+                <option value="">All Grades</option>
+                <option value="grade1">Year 1 (Basic 1)</option>
+                <option value="grade2">Year 2 (Basic 2)</option>
+                <option value="grade3">Year 3 (Basic 3)</option>
+                <option value="grade4">Year 4 (Basic 4)</option>
+                <option value="grade5">Year 5 (Basic 5)</option>
+            </select>
+
+            <label for="searchStudent">Search Student:</label>
+            <input type="search" id="searchStudent" placeholder="Enter student name...">
+
+            <button onclick="loadResultsFromServer()">🔄 Refresh</button>
+            <button onclick="exportToCSV()" class="secondary">📥 Export CSV</button>
+            <button onclick="printTable()" class="secondary">📄 Print</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Total Students</h4>
+                <div class="value" id="totalStudents">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Scores Entered</h4>
+                <div class="value" id="scoresEntered">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Pending Scores</h4>
+                <div class="value" id="pendingScores">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Average Final Mark</h4>
+                <div class="value" id="averageScore">0%</div>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Grade</th>
+                        <th>Exam Score (60)</th>
+                        <th>Project Score (40)</th>
+                        <th>Final Score (100)</th>
+                        <th>Percentage</th>
+                        <th>Letter Grade</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px; color: #999;">Loading results...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h2>📝 Edit Project Score</h2>
+            <div class="form-group">
+                <label>Student Name:</label>
+                <input type="text" id="studentNameDisplay" readonly style="background: #f8f9fa;">
+            </div>
+            <div class="form-group">
+                <label>Current Exam Score (60):</label>
+                <input type="number" id="examScoreDisplay" readonly style="background: #f8f9fa;">
+            </div>
+            <div class="form-group">
+                <label>Project Score (Out of 40): *</label>
+                <input type="number" id="projectScore" min="0" max="40" placeholder="Enter score (0-40)">
+                <small style="color: #666; margin-top: 5px; display: block;">Project contributes 40% to final grade</small>
+            </div>
+            <div class="form-group">
+                <label style="background: #e8f4f8; padding: 10px; border-radius: 6px;">
+                    <strong>Final Score Preview:</strong>
+                    <div id="finalScorePreview" style="margin-top: 8px; font-size: 1.3em; color: #667eea;">0/100</div>
+                </label>
+            </div>
+            <div class="modal-buttons">
+                <button class="secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="success" onclick="saveProjectScore()">Save Score</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allResults = [];
+        let currentEditingIndex = -1;
+
+        // Load results from server/file
+        async function loadResultsFromServer() {
+            try {
+                const response = await fetch('data/results.json');
+                if (!response.ok) throw new Error('Failed to load results');
+                allResults = await response.json();
+                renderResults(allResults);
+                updateStats();
+                showMessage('Results loaded successfully', 'success');
+            } catch (error) {
+                showMessage('Error loading results: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        // Render results in table
+        function renderResults(results) {
+            const tbody = document.getElementById('tableBody');
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #999;">No results found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = results.map((result, index) => `
+                <tr>
+                    <td class="student-name">${result.name}</td>
+                    <td><span class="grade-badge ${result.grade}">${result.gradeLabel}</span></td>
+                    <td style="text-align: center; font-weight: 600;">${result.finalOver60}/60</td>
+                    <td style="text-align: center;">
+                        <span style="background: ${result.projectScore !== undefined && result.projectScore > 0 ? '#d4edda' : '#fff3cd'}; padding: 8px 12px; border-radius: 6px; font-weight: 600;">
+                            ${result.projectScore !== undefined ? result.projectScore : '—'}/40
+                        </span>
+                    </td>
+                    <td style="text-align: center; font-weight: 700; color: #667eea;">
+                        ${result.projectScore !== undefined ? (result.finalOver60 + result.projectScore) : result.finalOver60}/100
+                    </td>
+                    <td style="text-align: center;">
+                        <strong>${result.projectScore !== undefined ? Math.round(((result.finalOver60 + result.projectScore) / 100) * 100) : 'Pending'}%</strong>
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="grade-badge" style="background: ${getGradeColor(result)}">
+                            ${result.projectScore !== undefined ? calculateGrade(result.finalOver60 + result.projectScore) : '—'}
+                        </span>
+                    </td>
+                    <td class="action-buttons">
+                        <button onclick="openEditModal(${index})" class="success">✏️ Edit</button>
+                        <button onclick="clearProjectScore(${index})" class="danger">🗑️ Clear</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Filter and search functionality
+        document.getElementById('gradeFilter').addEventListener('change', filterResults);
+        document.getElementById('searchStudent').addEventListener('input', filterResults);
+
+        function filterResults() {
+            const gradeFilter = document.getElementById('gradeFilter').value;
+            const searchTerm = document.getElementById('searchStudent').value.toLowerCase();
+
+            const filtered = allResults.filter(result => {
+                const matchGrade = !gradeFilter || result.grade === gradeFilter;
+                const matchName = !searchTerm || result.name.toLowerCase().includes(searchTerm);
+                return matchGrade && matchName;
+            });
+
+            renderResults(filtered);
+        }
+
+        // Open edit modal
+        function openEditModal(index) {
+            currentEditingIndex = index;
+            const result = allResults[index];
+
+            document.getElementById('studentNameDisplay').value = result.name;
+            document.getElementById('examScoreDisplay').value = result.finalOver60;
+            document.getElementById('projectScore').value = result.projectScore || '';
+
+            document.getElementById('projectScore').addEventListener('input', updateFinalScorePreview);
+            updateFinalScorePreview();
+
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        // Close edit modal
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+            currentEditingIndex = -1;
+            document.getElementById('projectScore').removeEventListener('input', updateFinalScorePreview);
+        }
+
+        // Update final score preview
+        function updateFinalScorePreview() {
+            const examScore = parseInt(document.getElementById('examScoreDisplay').value) || 0;
+            const projectScore = parseInt(document.getElementById('projectScore').value) || 0;
+            const finalScore = examScore + projectScore;
+            document.getElementById('finalScorePreview').textContent = `${finalScore}/100 (${Math.round((finalScore / 100) * 100)}%)`;
+        }
+
+        // Save project score
+        async function saveProjectScore() {
+            const projectScore = parseInt(document.getElementById('projectScore').value);
+
+            if (projectScore < 0 || projectScore > 40) {
+                showMessage('Project score must be between 0 and 40', 'error');
+                return;
+            }
+
+            const result = allResults[currentEditingIndex];
+            const previousFinal = result.finalOver60 + (result.projectScore || 0);
+
+            result.projectScore = projectScore;
+            result.finalScore = result.finalOver60 + projectScore;
+            result.percentage = Math.round((result.finalScore / 100) * 100);
+            result.gradeLetter = calculateGrade(result.finalScore);
+
+            // Save to server
+            try {
+                const response = await fetch('api/save-results', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ results: allResults })
+                });
+
+                if (!response.ok) {
+                    // Fallback: try to save to localStorage if server fails
+                    localStorage.setItem('examResults', JSON.stringify(allResults));
+                }
+
+                renderResults(allResults);
+                updateStats();
+                closeEditModal();
+                showMessage(`✓ Project score saved successfully for ${result.name}`, 'success');
+            } catch (error) {
+                console.error('Save error:', error);
+                showMessage('Error saving score. Please try again.', 'error');
+            }
+        }
+
+        // Clear project score
+        async function clearProjectScore(index) {
+            if (!confirm('Are you sure you want to clear the project score for this student?')) return;
+
+            allResults[index].projectScore = undefined;
+            allResults[index].finalScore = allResults[index].finalOver60;
+            allResults[index].percentage = Math.round((allResults[index].finalOver60 / 100) * 100);
+
+            try {
+                await fetch('api/save-results', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ results: allResults })
+                }).catch(() => {
+                    localStorage.setItem('examResults', JSON.stringify(allResults));
+                });
+
+                renderResults(allResults);
+                updateStats();
+                showMessage('Project score cleared successfully', 'success');
+            } catch (error) {
+                showMessage('Error clearing score', 'error');
+            }
+        }
+
+        // Calculate letter grade
+        function calculateGrade(percentage) {
+            if (percentage >= 90) return 'A';
+            if (percentage >= 80) return 'B';
+            if (percentage >= 70) return 'C';
+            if (percentage >= 60) return 'D';
+            return 'E';
+        }
+
+        // Get grade color
+        function getGradeColor(result) {
+            if (!result.projectScore) return '#fff3cd';
+            const grade = calculateGrade(result.percentage);
+            const colors = {
+                'A': '#d4edda',
+                'B': '#cfe2ff',
+                'C': '#fff3cd',
+                'D': '#f8d7da',
+                'E': '#f8d7da'
+            };
+            return colors[grade] || '#fff3cd';
+        }
+
+        // Update statistics
+        function updateStats() {
+            const totalStudents = allResults.length;
+            const scoresEntered = allResults.filter(r => r.projectScore !== undefined).length;
+            const pendingScores = totalStudents - scoresEntered;
+            const averageScore = scoresEntered > 0
+                ? Math.round(allResults.filter(r => r.projectScore !== undefined).reduce((sum, r) => sum + r.percentage, 0) / scoresEntered)
+                : 0;
+
+            document.getElementById('totalStudents').textContent = totalStudents;
+            document.getElementById('scoresEntered').textContent = scoresEntered;
+            document.getElementById('pendingScores').textContent = pendingScores;
+            document.getElementById('averageScore').textContent = averageScore + '%';
+        }
+
+        // Show message
+        function showMessage(text, type) {
+            const msgEl = document.getElementById(type === 'success' ? 'successMsg' : 'errorMsg');
+            msgEl.textContent = text;
+            msgEl.classList.add('show');
+            setTimeout(() => msgEl.classList.remove('show'), 4000);
+        }
+
+        // Export to CSV
+        function exportToCSV() {
+            let csv = 'Student Name,Grade,Exam Score,Project Score,Final Score,Percentage,Letter Grade\n';
+            allResults.forEach(r => {
+                csv += `"${r.name}","${r.gradeLabel}",${r.finalOver60},${r.projectScore || 'N/A'},${r.projectScore ? r.finalOver60 + r.projectScore : 'Pending'},${r.projectScore ? r.percentage : 'Pending'},${r.projectScore ? calculateGrade(r.percentage) : 'N/A'}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ICT-Results-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+
+        // Print table
+        function printTable() {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write('<html><head><title>ICT Results</title>');
+            printWindow.document.write('<style>table {border-collapse: collapse; width: 100%;} th, td {border: 1px solid #ddd; padding: 8px; text-align: left;} th {background: #667eea; color: white;} tr:nth-child(even) {background: #f2f2f2;}</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write('<h2>ICT Final Term Results - Project Scores</h2>');
+            printWindow.document.write(document.getElementById('resultsTable').outerHTML);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        // Close modal on outside click
+        document.getElementById('editModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                closeEditModal();
+            }
+        });
+
+        // Load results on page load
+        window.addEventListener('load', loadResultsFromServer);
+    </script>
+</body>
+</html>

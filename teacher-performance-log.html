@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Behavioral Performance - Daily Log</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .behavior-log-container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #007bff;
+    }
+
+    .header h1 {
+      margin: 0;
+      color: #333;
+      font-size: 28px;
+    }
+
+    .date-selector {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    .date-selector input {
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .student-selector {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 25px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group select {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+    }
+
+    .performance-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 25px;
+    }
+
+    .category-section {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .category-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #007bff;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #007bff;
+    }
+
+    .metric-item {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .metric-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .metric-label {
+      font-weight: 500;
+      margin-bottom: 10px;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .rating-scale {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+    }
+
+    .rating-button {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 5px;
+      background: white;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .rating-button:hover {
+      border-color: #007bff;
+      background: #f0f8ff;
+    }
+
+    .rating-button.selected {
+      background: #007bff;
+      color: white;
+      border-color: #007bff;
+    }
+
+    .rating-one { --score-color: #dc3545; }
+    .rating-two { --score-color: #fd7e14; }
+    .rating-three { --score-color: #ffc107; }
+    .rating-four { --score-color: #28a745; }
+    .rating-five { --score-color: #20c997; }
+
+    .rating-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #888;
+      margin-top: 5px;
+      text-align: center;
+    }
+
+    .comment-section {
+      grid-column: 1 / -1;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .comment-section textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .comment-section textarea:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+    }
+
+    .submit-section {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 12px 30px;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #007bff;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #0056b3;
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #d0d0d0;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .alert {
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .alert.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+
+    .alert.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .metric-scores-summary {
+      grid-column: 1 / -1;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .summary-card {
+      background: white;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid #007bff;
+    }
+
+    .summary-card-label {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 5px;
+    }
+
+    .summary-card-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #007bff;
+    }
+
+    @media (max-width: 768px) {
+      .performance-form {
+        grid-template-columns: 1fr;
+      }
+
+      .student-selector {
+        grid-template-columns: 1fr;
+      }
+
+      .header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+      }
+
+      .date-selector {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="behavior-log-container">
+    <!-- Header -->
+    <div class="header">
+      <h1>📊 Student Behavioral Performance</h1>
+      <div class="date-selector">
+        <label for="performanceDate">Date:</label>
+        <input type="date" id="performanceDate" value="">
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div id="alertContainer"></div>
+
+    <!-- Student Selector -->
+    <div class="student-selector">
+      <div class="form-group">
+        <label for="schoolSelect">School:</label>
+        <select id="schoolSelect">
+          <option value="">Select School...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="classSelect">Class:</label>
+        <select id="classSelect">
+          <option value="">Select Class...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="studentSelect">Student:</label>
+        <select id="studentSelect">
+          <option value="">Select Student...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button class="btn btn-secondary" onclick="loadStudentPerformance()" style="width: 100%;">Load Student</button>
+      </div>
+    </div>
+
+    <!-- Performance Form -->
+    <form id="performanceForm" class="performance-form" onsubmit="submitPerformance(event)">
+      <!-- Academic Engagement -->
+      <div class="category-section">
+        <div class="category-title">📚 Academic Engagement</div>
+        <div id="academic_engagement"></div>
+      </div>
+
+      <!-- Social Skills -->
+      <div class="category-section">
+        <div class="category-title">🤝 Social Skills</div>
+        <div id="social_skills"></div>
+      </div>
+
+      <!-- Learning Behavior -->
+      <div class="category-section">
+        <div class="category-title">🧠 Learning Behavior</div>
+        <div id="learning_behavior"></div>
+      </div>
+
+      <!-- Classroom Conduct -->
+      <div class="category-section">
+        <div class="category-title">🧍 Classroom Conduct</div>
+        <div id="classroom_conduct"></div>
+      </div>
+
+      <!-- Personal Development -->
+      <div class="category-section">
+        <div class="category-title">🌟 Personal Development</div>
+        <div id="personal_development"></div>
+      </div>
+
+      <!-- Comments Section -->
+      <div class="comment-section">
+        <div class="form-group">
+          <label for="teacherComment">Teacher's Comment (Optional)</label>
+          <textarea id="teacherComment" placeholder="Add any additional observations or comments about the student's performance..."></textarea>
+        </div>
+      </div>
+
+      <!-- Score Summary -->
+      <div class="metric-scores-summary">
+        <h3>📈 Performance Summary</h3>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-card-label">Overall Score</div>
+            <div class="summary-card-value" id="overallScore">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-label">Average Score</div>
+            <div class="summary-card-value" id="averageScore">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-label">Metrics Scored</div>
+            <div class="summary-card-value" id="metricsScored">0/15</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Section -->
+      <div class="submit-section">
+        <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Save Performance</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v2/behavioral';
+    let metricsByCategory = {};
+    let selectedScores = {};
+
+    // Set today's date by default
+    document.getElementById('performanceDate').valueAsDate = new Date();
+
+    // Initialize
+    async function init() {
+      try {
+        await loadMetrics();
+        await loadSchools();
+      } catch (error) {
+        showAlert('Error initializing form: ' + error.message, 'error');
+      }
+    }
+
+    // Load metrics grouped by category
+    async function loadMetrics() {
+      try {
+        const response = await fetch(`${API_BASE}/metrics/grouped`);
+        const result = await response.json();
+
+        if (!result.success) throw new Error(result.error);
+
+        metricsByCategory = result.data;
+        renderMetrics();
+      } catch (error) {
+        showAlert('Error loading metrics: ' + error.message, 'error');
+      }
+    }
+
+    // Render metrics form
+    function renderMetrics() {
+      Object.keys(metricsByCategory).forEach(category => {
+        const container = document.getElementById(category);
+        if (!container) return;
+
+        const metrics = metricsByCategory[category];
+        let html = '';
+
+        metrics.forEach(metric => {
+          html += `
+            <div class="metric-item">
+              <div class="metric-label">${metric.name}</div>
+              <div class="rating-scale">
+                ${[1, 2, 3, 4, 5].map(score => `
+                  <button 
+                    type="button" 
+                    class="rating-button rating-${score}" 
+                    onclick="selectMetricScore('${metric.id}', ${score}, event)"
+                    data-metric="${metric.id}"
+                    data-score="${score}"
+                  >
+                    ${score}
+                  </button>
+                `).join('')}
+              </div>
+              <div class="rating-labels">
+                <span>Poor</span>
+                <span>Excellent</span>
+              </div>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html;
+      });
+    }
+
+    // Select metric score
+    function selectMetricScore(metricId, score, event) {
+      event.preventDefault();
+      selectedScores[metricId] = score;
+
+      // Update UI
+      document.querySelectorAll(`[data-metric="${metricId}"]`).forEach(btn => {
+        btn.classList.remove('selected');
+      });
+
+      event.target.classList.add('selected');
+
+      // Update summary
+      updateScoreSummary();
+    }
+
+    // Update score summary
+    function updateScoreSummary() {
+      const scores = Object.values(selectedScores);
+      const metricsTotal = Object.keys(selectedScores).length;
+      const metricsExpected = Object.keys(metricsByCategory).reduce((sum, cat) => sum + metricsByCategory[cat].length, 0);
+
+      if (scores.length > 0) {
+        const overall = scores.reduce((a, b) => a + b, 0);
+        const average = (overall / scores.length).toFixed(2);
+
+        document.getElementById('overallScore').textContent = overall.toString();
+        document.getElementById('averageScore').textContent = average;
+        document.getElementById('metricsScored').textContent = `${metricsTotal}/${metricsExpected}`;
+      } else {
+        document.getElementById('overallScore').textContent = '-';
+        document.getElementById('averageScore').textContent = '-';
+        document.getElementById('metricsScored').textContent = `0/${metricsExpected}`;
+      }
+    }
+
+    // Load schools
+    async function loadSchools() {
+      // This would fetch from your database
+      // For now, using placeholder
+      const schools = await fetch('/api/v2/assessments?action=schools').catch(() => ({
+        data: []
+      }));
+    }
+
+    // Load student performance
+    function loadStudentPerformance() {
+      const studentId = document.getElementById('studentSelect').value;
+      if (!studentId) {
+        showAlert('Please select a student', 'error');
+        return;
+      }
+      // Reset form and load existing data if available
+    }
+
+    // Submit performance
+    async function submitPerformance(event) {
+      event.preventDefault();
+
+      const studentId = document.getElementById('studentSelect').value;
+      const date = document.getElementById('performanceDate').value;
+      const teacherComment = document.getElementById('teacherComment').value;
+
+      if (!studentId) {
+        showAlert('Please select a student', 'error');
+        return;
+      }
+
+      if (Object.keys(selectedScores).length === 0) {
+        showAlert('Please rate at least one metric', 'error');
+        return;
+      }
+
+      try {
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span> Saving...';
+
+        // Get school and class from selectors
+        const schoolId = document.getElementById('schoolSelect').value;
+        const classLevel = document.getElementById('classSelect').value;
+
+        const response = await fetch(`${API_BASE}/record`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+          },
+          body: JSON.stringify({
+            student_id: studentId,
+            teacher_id: localStorage.getItem('userId'),
+            school_id: schoolId,
+            class: classLevel,
+            date,
+            metric_scores: selectedScores,
+            teacher_comment
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) throw new Error(result.error);
+
+        showAlert('Performance recorded successfully!', 'success');
+        selectedScores = {};
+        renderMetrics();
+        updateScoreSummary();
+        document.getElementById('teacherComment').value = '';
+
+        // Reset form
+        setTimeout(() => resetSelectors(), 2000);
+      } catch (error) {
+        showAlert('Error saving performance: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Save Performance';
+      }
+    }
+
+    // Reset form
+    function resetForm() {
+      selectedScores = {};
+      document.getElementById('teacherComment').value = '';
+      document.getElementById('performanceForm').reset();
+      renderMetrics();
+      updateScoreSummary();
+    }
+
+    // Reset selectors
+    function resetSelectors() {
+      document.getElementById('studentSelect').value = '';
+      document.getElementById('classSelect').value = '';
+      document.getElementById('schoolSelect').value = '';
+    }
+
+    // Show alert
+    function showAlert(message, type) {
+      const container = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert ${type}`;
+      alert.textContent = message;
+      container.innerHTML = '';
+      container.appendChild(alert);
+
+      if (type === 'success') {
+        setTimeout(() => {
+          alert.style.display = 'none';
+        }, 5000);
+      }
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

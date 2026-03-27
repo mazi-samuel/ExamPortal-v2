@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance Analytics Dashboard - Teacher View</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f7fa;
+      color: #333;
+    }
+
+    .analytics-container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .filters {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 25px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .filter-group label {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 5px rgba(102, 126, 234, 0.2);
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      transition: box-shadow 0.3s;
+    }
+
+    .card:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .stat-box {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin: 20px 0;
+    }
+
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+
+    .metrics-table th {
+      background: #f8f9fa;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+      color: #666;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .metrics-table td {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+
+    .metrics-table tr:hover {
+      background: #f8f9fa;
+    }
+
+    .score-cell {
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-excellent {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-good {
+      background: #cfe2ff;
+      color: #084298;
+    }
+
+    .badge-needs-improvement {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .student-list {
+      margin: 15px 0;
+    }
+
+    .student-item {
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .student-name {
+      font-weight: 500;
+      color: #333;
+    }
+
+    .student-score {
+      font-weight: 700;
+      color: #667eea;
+      font-size: 14px;
+    }
+
+    .performance-list {
+      margin: 15px 0;
+    }
+
+    .performance-item {
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      border-left: 4px solid #667eea;
+    }
+
+    .performance-date {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .performance-metric {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin: 5px 0;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    .tab {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      color: #666;
+      position: relative;
+      transition: color 0.3s;
+    }
+
+    .tab.active {
+      color: #667eea;
+    }
+
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #667eea;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .alert-item {
+      padding: 12px;
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .alert-critical {
+      background: #f8d7da;
+      border-left-color: #dc3545;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .filters {
+        grid-template-columns: 1fr;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .tabs {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="analytics-container">
+    <!-- Header -->
+    <div class="header">
+      <h1>📊 Performance Analytics Dashboard</h1>
+      <p>Monitor and analyze student behavioral performance across your class</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <div class="filter-group">
+        <label for="schoolSelect">School:</label>
+        <select id="schoolSelect" onchange="updateAnalytics()">
+          <option value="">All Schools</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="classSelect">Class:</label>
+        <select id="classSelect" onchange="updateAnalytics()">
+          <option value="">All Classes</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="dateFrom">From Date:</label>
+        <input type="date" id="dateFrom" onchange="updateAnalytics()">
+      </div>
+      <div class="filter-group">
+        <label for="dateTo">To Date:</label>
+        <input type="date" id="dateTo" onchange="updateAnalytics()">
+      </div>
+      <div class="filter-group">
+        <label>&nbsp;</label>
+        <button class="btn-primary" onclick="exportReport()">📥 Export Report</button>
+      </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+      <!-- Summary Stats -->
+      <div class="card">
+        <div class="card-title">📈 Class Overview</div>
+        <div class="stat-box">
+          <div class="stat-value" id="totalStudents">0</div>
+          <div class="stat-label">Students Evaluated</div>
+        </div>
+        <div class="stat-box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+          <div class="stat-value" id="classAverage">0</div>
+          <div class="stat-label">Class Average Score</div>
+        </div>
+        <div class="stat-box" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+          <div class="stat-value" id="evaluationsToday">0</div>
+          <div class="stat-label">Evaluations Today</div>
+        </div>
+      </div>
+
+      <!-- Top Performers -->
+      <div class="card">
+        <div class="card-title">⭐ Top Performers</div>
+        <div class="student-list" id="topPerformers">
+          <p style="text-align: center; color: #999;">Loading...</p>
+        </div>
+      </div>
+
+      <!-- Needs Improvement -->
+      <div class="card">
+        <div class="card-title">📌 Needs Improvement</div>
+        <div class="student-list" id="needsImprovement">
+          <p style="text-align: center; color: #999;">Loading...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="dashboard-grid">
+      <div class="card">
+        <div class="card-title">📊 Performance Distribution</div>
+        <div class="chart-container">
+          <canvas id="performanceChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 Metric Strengths & Weaknesses</div>
+        <div class="chart-container">
+          <canvas id="metricsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed Analysis -->
+    <div class="card" style="grid-column: 1 / -1;">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('all-students')">All Students</button>
+        <button class="tab" onclick="switchTab('alerts')">⚠️ Alerts</button>
+        <button class="tab" onclick="switchTab('trends')">📈 Trends</button>
+        <button class="tab" onclick="switchTab('reports')">📄 Reports</button>
+      </div>
+
+      <!-- All Students Tab -->
+      <div id="all-students" class="tab-content active">
+        <table class="metrics-table">
+          <thead>
+            <tr>
+              <th>Student Name</th>
+              <th>Date</th>
+              <th>Average Score</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="studentsTableBody">
+            <tr><td colspan="5" style="text-align: center; color: #999;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Alerts Tab -->
+      <div id="alerts" class="tab-content">
+        <div id="alertsList">
+          <p style="text-align: center; color: #999;">No active alerts</p>
+        </div>
+      </div>
+
+      <!-- Trends Tab -->
+      <div id="trends" class="tab-content">
+        <div class="chart-container">
+          <canvas id="trendsChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Reports Tab -->
+      <div id="reports" class="tab-content">
+        <div id="reportsList" style="margin: 20px 0;"></div>
+        <button class="btn-primary" onclick="generateWeeklyReport()">Generate Weekly Report</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v2/behavioral';
+    let performanceChart, metricsChart, trendsChart;
+
+    // Set default dates (last 30 days)
+    const today = new Date();
+    const last30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    document.getElementById('dateFrom').valueAsDate = last30;
+    document.getElementById('dateTo').valueAsDate = today;
+
+    // Initialize
+    async function init() {
+      await updateAnalytics();
+    }
+
+    // Update all analytics
+    async function updateAnalytics() {
+      try {
+        const schoolId = document.getElementById('schoolSelect').value;
+        const classLevel = document.getElementById('classSelect').value;
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+
+        if (!classLevel || !dateFrom || !dateTo) {
+          alert('Please select class and dates');
+          return;
+        }
+
+        // Fetch class summary
+        const today = new Date().toISOString().split('T')[0];
+        const response = await axios.get(
+          `${API_BASE}/class-summary/${schoolId}/${classLevel}/${today}`
+        );
+
+        const data = response.data.data;
+
+        // Update summary stats
+        document.getElementById('totalStudents').textContent = data.totalStudents || 0;
+        document.getElementById('classAverage').textContent = data.averageScore || '0';
+        document.getElementById('evaluationsToday').textContent = data.topPerformers?.length || 0;
+
+        // Render top performers
+        renderTopPerformers(data.topPerformers);
+
+        // Render needs improvement
+        renderNeedsImprovement(data.needsImprovement);
+
+        // Load detailed data
+        await loadDetailedAnalytics(schoolId, classLevel, dateFrom, dateTo);
+      } catch (error) {
+        console.error('Error updating analytics:', error);
+      }
+    }
+
+    function renderTopPerformers(performers) {
+      const container = document.getElementById('topPerformers');
+      
+      if (!performers || performers.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #999;">No data yet</p>';
+        return;
+      }
+
+      container.innerHTML = performers.slice(0, 5).map(p => `
+        <div class="student-item">
+          <div>
+            <div class="student-name">${p.profiles?.full_name || 'Unknown'}</div>
+            <div style="font-size: 12px; color: #999;">Avg: ${p.average_score?.toFixed(1)}/5</div>
+          </div>
+          <div class="student-score">${(p.average_score * 20).toFixed(0)}%</div>
+        </div>
+      `).join('');
+    }
+
+    function renderNeedsImprovement(students) {
+      const container = document.getElementById('needsImprovement');
+      
+      if (!students || students.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #999;">No concerns</p>';
+        return;
+      }
+
+      container.innerHTML = students.slice(0, 5).map(s => `
+        <div class="student-item">
+          <div>
+            <div class="student-name">${s.profiles?.full_name || 'Unknown'}</div>
+            <div style="font-size: 12px; color: #999;">Avg: ${s.average_score?.toFixed(1)}/5</div>
+          </div>
+          <span class="badge badge-needs-improvement">${(s.average_score * 20).toFixed(0)}%</span>
+        </div>
+      `).join('');
+    }
+
+    async function loadDetailedAnalytics(schoolId, classLevel, dateFrom, dateTo) {
+      // This would load detailed student data and render in tables/charts
+      // Implementation depends on your API
+    }
+
+    function switchTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+
+      // Show selected tab
+      document.getElementById(tabName).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function exportReport() {
+      alert('Export feature coming soon! This will generate a PDF report.');
+    }
+
+    function generateWeeklyReport() {
+      alert('Weekly report generation coming soon!');
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

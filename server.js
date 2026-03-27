@@ -31,15 +31,17 @@ app.use('/', express.static(path.join(__dirname)));
 // ============================================================
 //  V2 API Routes (new modular endpoints)
 // ============================================================
-app.use('/api/v2/assessments',   require('./routes/assessments'));
-app.use('/api/v2/term-results',  require('./routes/termResults'));
-app.use('/api/v2/assignments',   require('./routes/assignments'));
-app.use('/api/v2/attendance',    require('./routes/attendance'));
-app.use('/api/v2/notifications', require('./routes/notifications'));
-app.use('/api/v2/question-bank', require('./routes/questionBank'));
-app.use('/api/v2/analytics',     require('./routes/analytics'));
-app.use('/api/v2/messages',      require('./routes/messaging'));
-app.use('/api/v2/gamification',  require('./routes/gamification'));
+app.use('/api/v2/assessments',           require('./routes/assessments'));
+app.use('/api/v2/term-results',          require('./routes/termResults'));
+app.use('/api/v2/assignments',           require('./routes/assignments'));
+app.use('/api/v2/attendance',            require('./routes/attendance'));
+app.use('/api/v2/notifications',         require('./routes/notifications'));
+app.use('/api/v2/question-bank',         require('./routes/questionBank'));
+app.use('/api/v2/analytics',             require('./routes/analytics'));
+app.use('/api/v2/messages',              require('./routes/messaging'));
+app.use('/api/v2/gamification',          require('./routes/gamification'));
+app.use('/api/v2/behavioral',            require('./routes/behavioralPerformance'));
+app.use('/api/v2/results-management',    require('./routes/resultsManagement'));
 
 // ============================================================
 //  Legacy API (kept for backward compatibility)

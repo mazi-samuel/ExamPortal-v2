@@ -27,13 +27,13 @@
 
             <!-- Role selection -->
             <div class="tabs justify-center mb-3" style="border:none;">
-                <button class="tab-btn active" id="tabStudent" onclick="setRole('student')">
+                <button type="button" class="tab-btn active" id="tabStudent" onclick="setRole('student')">
                     <i class="fas fa-child"></i> Student
                 </button>
-                <button class="tab-btn" id="tabTeacher" onclick="setRole('teacher')">
+                <button type="button" class="tab-btn" id="tabTeacher" onclick="setRole('teacher')">
                     <i class="fas fa-chalkboard-teacher"></i> Teacher
                 </button>
-                <button class="tab-btn" id="tabParent" onclick="setRole('parent')">
+                <button type="button" class="tab-btn" id="tabParent" onclick="setRole('parent')">
                     <i class="fas fa-user-friends"></i> Parent
                 </button>
             </div>
@@ -229,6 +229,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase-config.js"></script>
     <script>
+        // Lazy client init so role toggles still work even when network is slow.
+        function getDbClient() {
+            if (window.db) return window.db;
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                window.db = window.supabase.createClient(
+                    'https://znqavwjsrdblhfswktxw.supabase.co',
+                    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpucWF2d2pzcmRibGhmc3drdHh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NjEyOTYsImV4cCI6MjA4NjUzNzI5Nn0.jWj6FotryDM0CJqK2WK6bGPBPbAndyJbiCH7NH5Pxx8'
+                );
+                return window.db;
+            }
+            return null;
+        }
+
         let currentRole = 'student';
 
         function setRole(role) {
@@ -299,6 +312,9 @@
             btn.innerHTML = '<span class="loader" style="width:20px;height:20px;border-width:3px"></span> Creating account...';
 
             try {
+                var db = getDbClient();
+                if (!db) throw new Error('Supabase did not load. Refresh and try again.');
+
                 var fullName = document.getElementById('fullName').value.trim();
                 if (!fullName) throw new Error('Please enter your full name');
 

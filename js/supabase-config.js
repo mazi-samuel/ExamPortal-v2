@@ -6,7 +6,8 @@ const SUPABASE_URL = 'https://znqavwjsrdblhfswktxw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpucWF2d2pzcmRibGhmc3drdHh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NjEyOTYsImV4cCI6MjA4NjUzNzI5Nn0.jWj6FotryDM0CJqK2WK6bGPBPbAndyJbiCH7NH5Pxx8';
 
 // Initialize Supabase client  (the CDN exposes window.supabase)
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.db = window.db || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.db;
 
 // Ephraim School UUID (seeded in schema.sql)
 const EPHRAIM_SCHOOL_ID = '00000000-0000-0000-0000-000000000001';

@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parent Dashboard - Student Performance</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .parent-dashboard {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .top-bar {
+      background: white;
+      padding: 20px 30px;
+      border-radius: 10px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .top-bar h1 {
+      color: #333;
+      font-size: 28px;
+      margin: 0;
+    }
+
+    .notification-bell {
+      position: relative;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: #ff6b6b;
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .notifications-panel {
+      position: absolute;
+      top: 60px;
+      right: 0;
+      width: 350px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+      max-height: 500px;
+      overflow-y: auto;
+      display: none;
+      z-index: 1000;
+    }
+
+    .notifications-panel.active {
+      display: block;
+    }
+
+    .notification-item {
+      padding: 15px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .notification-item:hover {
+      background: #f8f9fa;
+    }
+
+    .notification-item.unread {
+      background: #f0f7ff;
+      border-left: 4px solid #007bff;
+    }
+
+    .notification-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .notification-message {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .notification-time {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .performance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      margin: 0;
+    }
+
+    .card-icon {
+      font-size: 24px;
+    }
+
+    .score-display {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 20px 0;
+    }
+
+    .score-value {
+      font-size: 48px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .score-out-of {
+      font-size: 14px;
+      color: #999;
+    }
+
+    .performance-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 15px 0;
+    }
+
+    .performance-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .insight-text {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+
+    .strength-weakness {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin: 15px 0;
+    }
+
+    .strength-item,
+    .weakness-item {
+      padding: 12px;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+
+    .strength-item {
+      background: #d4edda;
+      color: #155724;
+      border-left: 3px solid #28a745;
+    }
+
+    .weakness-item {
+      background: #f8d7da;
+      color: #721c24;
+      border-left: 3px solid #dc3545;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin: 5px 5px 0 0;
+    }
+
+    .badge-excellent {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .badge-good {
+      background: #cfe2ff;
+      color: #084298;
+    }
+
+    .badge-needs-improvement {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 250px;
+      margin: 20px 0;
+    }
+
+    .metrics-breakdown {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin: 15px 0;
+    }
+
+    .metric-box {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 5px;
+      text-align: center;
+      border: 1px solid #dee2e6;
+    }
+
+    .metric-name {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+
+    .metric-score {
+      font-size: 20px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .alert-box {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 15px 0;
+      display: flex;
+      gap: 10px;
+    }
+
+    .alert-icon {
+      font-size: 20px;
+    }
+
+    .alert-content {
+      flex: 1;
+    }
+
+    .alert-title {
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+
+    .alert-message {
+      font-size: 13px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .btn {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-outline:hover {
+      background: #f0f4ff;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+
+    @media (max-width: 768px) {
+      .performance-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .top-bar {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+      }
+
+      .strength-weakness {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="parent-dashboard">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <h1>👨‍👩‍👧 Student Performance Dashboard</h1>
+      <div class="notification-bell" onclick="toggleNotifications()">
+        🔔
+        <span class="notification-badge" id="notifBadge" style="display: none;">0</span>
+        <div class="notifications-panel" id="notificationsPanel">
+          <div style="padding: 15px; border-bottom: 1px solid #eee; font-weight: 600;">
+            Notifications
+          </div>
+          <div id="notificationsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Cards Grid -->
+    <div class="performance-grid" id="performanceGrid">
+      <!-- Dynamic cards loaded here -->
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v2/behavioral';
+
+    // Toggle notifications panel
+    function toggleNotifications() {
+      const panel = document.getElementById('notificationsPanel');
+      panel.classList.toggle('active');
+    }
+
+    // Load parent notifications
+    async function loadNotifications() {
+      try {
+        const parentId = localStorage.getItem('userId');
+        const response = await fetch(`${API_BASE}/notifications/parent/${parentId}`);
+        const result = await response.json();
+
+        if (!result.success) throw new Error(result.error);
+
+        const notifications = result.data;
+        const unreadCount = notifications.filter(n => !n.is_read).length;
+
+        // Update badge
+        const badge = document.getElementById('notifBadge');
+        if (unreadCount > 0) {
+          badge.style.display = 'flex';
+          badge.textContent = unreadCount;
+        } else {
+          badge.style.display = 'none';
+        }
+
+        // Render notifications
+        renderNotifications(notifications);
+      } catch (error) {
+        console.error('Error loading notifications:', error);
+      }
+    }
+
+    function renderNotifications(notifications) {
+      const list = document.getElementById('notificationsList');
+      
+      if (notifications.length === 0) {
+        list.innerHTML = '<div style="padding: 30px 15px; text-align: center; color: #999;">No notifications yet</div>';
+        return;
+      }
+
+      list.innerHTML = notifications
+        .slice(0, 10)
+        .map(notif => `
+          <div class="notification-item ${!notif.is_read ? 'unread' : ''}" onclick="markNotificationAsRead('${notif.id}')">
+            <div class="notification-title">${notif.title}</div>
+            <div class="notification-message">${notif.message}</div>
+            <div class="notification-time">${new Date(notif.sent_at).toLocaleDateString()}</div>
+          </div>
+        `)
+        .join('');
+    }
+
+    async function markNotificationAsRead(notificationId) {
+      try {
+        const response = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+          }
+        });
+
+        if (response.ok) {
+          loadNotifications();
+        }
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
+    // Load student performance
+    async function loadStudentPerformance() {
+      try {
+        const studentId = localStorage.getItem('studentId');
+        const schoolId = localStorage.getItem('schoolId');
+
+        if (!studentId || !schoolId) {
+          document.getElementById('performanceGrid').innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">📋</div>
+              <p>Please ensure you are logged in as a parent.</p>
+            </div>
+          `;
+          return;
+        }
+
+        const response = await fetch(`${API_BASE}/student/${studentId}?schoolId=${schoolId}&dateFrom=${getDatesRange()}`);
+        const result = await response.json();
+
+        if (!result.success) throw new Error(result.error);
+
+        const performances = result.data;
+
+        if (performances.length === 0) {
+          document.getElementById('performanceGrid').innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">📊</div>
+              <p>No performance data available yet. Check back later!</p>
+            </div>
+          `;
+          return;
+        }
+
+        // Get latest performance
+        const latest = performances[0];
+        renderPerformanceCard(latest);
+      } catch (error) {
+        console.error('Error loading performance:', error);
+      }
+    }
+
+    function getDatesRange() {
+      const to = new Date();
+      const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return `${from.toISOString().split('T')[0]}&dateTo=${to.toISOString().split('T')[0]}`;
+    }
+
+    function renderPerformanceCard(performance) {
+      const grid = document.getElementById('performanceGrid');
+      const average = (performance.average_score * 20).toFixed(0); // Convert to percentage
+
+      const statusBadge = average >= 80 ? 'excellent' : average >= 60 ? 'good' : 'needs-improvement';
+      const statusText = average >= 80 ? 'Excellent' : average >= 60 ? 'Good' : 'Needs Improvement';
+
+      const html = `
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">📊 Daily Performance - ${new Date(performance.date).toLocaleDateString()}</h2>
+              <span class="badge badge-${statusBadge}">${statusText}</span>
+            </div>
+            <div class="card-icon">📈</div>
+          </div>
+
+          <div class="score-display">
+            <div>
+              <div class="score-value">${average}%</div>
+              <div class="score-out-of">Overall Performance</div>
+            </div>
+            <div>
+              <div class="score-value">${performance.average_score.toFixed(1)}</div>
+              <div class="score-out-of">Average Score (out of 5)</div>
+            </div>
+          </div>
+
+          <div class="performance-bar">
+            <div class="performance-fill" style="width: ${average}%;"></div>
+          </div>
+
+          ${performance.teacher_comment ? `
+            <div class="alert-box">
+              <div class="alert-icon">💬</div>
+              <div class="alert-content">
+                <div class="alert-title">Teacher's Comment</div>
+                <div class="alert-message">${performance.teacher_comment}</div>
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="insight-text">
+            <strong>Today's Observation:</strong>
+            <p>Your child has been working on various behavioral and academic skills. Keep encouraging them to maintain focus and continue the good work!</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">💪 Strengths</h2>
+            <div class="card-icon">⭐</div>
+          </div>
+          <div class="strength-weakness" style="grid-template-columns: 1fr;">
+            ${performance.metric_scores && Object.keys(performance.metric_scores).length > 0
+              ? Object.entries(performance.metric_scores)
+                  .filter(([_, score]) => score >= 4)
+                  .map(([metric, score]) => `<div class="strength-item">✓ Strong performance in various areas (${score}/5)</div>`)
+                  .slice(0, 3)
+                  .join('')
+              : '<div class="strength-item">Keep building on your strengths!</div>'
+            }
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">🎯 Areas for Improvement</h2>
+            <div class="card-icon">📌</div>
+          </div>
+          <div class="strength-weakness" style="grid-template-columns: 1fr;">
+            ${performance.metric_scores && Object.keys(performance.metric_scores).length > 0
+              ? Object.entries(performance.metric_scores)
+                  .filter(([_, score]) => score <= 2)
+                  .map(([metric, score]) => `<div class="weakness-item">⚠ Focus on improvement areas (${score}/5)</div>`)
+                  .slice(0, 3)
+                  .join('')
+              : '<div class="weakness-item">Keep working on consistency!</div>'
+            }
+          </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <h2 class="card-title">📈 Performance Metrics</h2>
+            <div class="card-icon">📊</div>
+          </div>
+          <div class="metrics-breakdown">
+            <div class="metric-box">
+              <div class="metric-name">Participation</div>
+              <div class="metric-score">${performance.metric_scores?.['participation'] || '-'}/5</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-name">Discipline</div>
+              <div class="metric-score">${performance.metric_scores?.['discipline'] || '-'}/5</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-name">Teamwork</div>
+              <div class="metric-score">${performance.metric_scores?.['teamwork'] || '-'}/5</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-name">Communication</div>
+              <div class="metric-score">${performance.metric_scores?.['communication'] || '-'}/5</div>
+            </div>
+          </div>
+          <div class="action-buttons">
+            <button class="btn btn-primary" onclick="viewDetailedReport()">View Detailed Report</button>
+            <button class="btn btn-outline" onclick="contactTeacher()">Contact Teacher</button>
+          </div>
+        </div>
+      `;
+
+      grid.innerHTML = html;
+    }
+
+    function viewDetailedReport() {
+      // Redirect to detailed report page
+      alert('Detailed report feature coming soon!');
+    }
+
+    function contactTeacher() {
+      // Open messaging interface
+      alert('Teacher contact feature coming soon!');
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadNotifications();
+      loadStudentPerformance();
+
+      // Refresh notifications every 30 seconds
+      setInterval(loadNotifications, 30000);
+
+      // Refresh performance every 5 minutes
+      setInterval(loadStudentPerformance, 5 * 60 * 1000);
+    });
+
+    // Close notifications panel when clicking outside
+    document.addEventListener('click', (e) => {
+      const bell = document.querySelector('.notification-bell');
+      if (!bell.contains(e.target)) {
+        document.getElementById('notificationsPanel').classList.remove('active');
+      }
+    });
+  </script>
+</body>
+</html>
