@@ -9,6 +9,8 @@
     "sectionB_raw": 13,
     "sectionC_raw": 14,
     "finalOver60": 53,
+    "CA": 40,
+    "overall": 93,
     "percentage": 88,
     "gradeLetter": "A",
     "gradeRemark": "Excellent!"
@@ -23,6 +25,8 @@
     "sectionB_raw": 11,
     "sectionC_raw": 12,
     "finalOver60": 44,
+    "CA": 40,
+    "overall": 84,
     "percentage": 73,
     "gradeLetter": "B",
     "gradeRemark": "Very Good!"
@@ -37,6 +41,8 @@
     "sectionB_raw": 9,
     "sectionC_raw": 10,
     "finalOver60": 37,
+    "CA": 30,
+    "overall": 67,
     "percentage": 62,
     "gradeLetter": "C",
     "gradeRemark": "Good!"
@@ -51,6 +57,8 @@
     "sectionB_raw": 8,
     "sectionC_raw": 6,
     "finalOver60": 26,
+    "CA": 30,
+    "overall": 56,
     "percentage": 43,
     "gradeLetter": "F",
     "gradeRemark": "Needs Improvement"
@@ -65,6 +73,8 @@
     "sectionB_raw": 15,
     "sectionC_raw": 15,
     "finalOver60": 59,
+    "CA": 40,
+    "overall": 99,
     "percentage": 98,
     "gradeLetter": "A+",
     "gradeRemark": "Outstanding!"

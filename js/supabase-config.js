@@ -6,7 +6,8 @@ const SUPABASE_URL = 'https://znqavwjsrdblhfswktxw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpucWF2d2pzcmRibGhmc3drdHh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA5NjEyOTYsImV4cCI6MjA4NjUzNzI5Nn0.jWj6FotryDM0CJqK2WK6bGPBPbAndyJbiCH7NH5Pxx8';
 
 // Initialize Supabase client  (the CDN exposes window.supabase)
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.db = window.db || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.db;
 
 // Ephraim School UUID (seeded in schema.sql)
 const EPHRAIM_SCHOOL_ID = '00000000-0000-0000-0000-000000000001';
@@ -126,19 +127,29 @@ function renderNav(profile) {
   if (profile && profile.role === 'teacher') {
     links = '<a href="/teacher-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
       + '<a href="/exam-builder.html"><i class="fas fa-plus-circle"></i> Create Exam</a>'
-      + '<a href="/teacher-scoresheet.html"><i class="fas fa-chart-bar"></i> Scores</a>'
+      + '<a href="/ca-entry.html"><i class="fas fa-clipboard-check"></i> CA Scores</a>'
+      + '<a href="/assignments.html"><i class="fas fa-tasks"></i> Assignments</a>'
+      + '<a href="/attendance.html"><i class="fas fa-calendar-check"></i> Attendance</a>'
+      + '<a href="/question-bank.html"><i class="fas fa-database"></i> Q-Bank</a>'
+      + '<a href="/analytics.html"><i class="fas fa-chart-line"></i> Analytics</a>'
+      + '<a href="/messages.html"><i class="fas fa-envelope"></i> Messages</a>'
+      + '<a href="/leaderboard.html"><i class="fas fa-trophy"></i> Rewards</a>'
       + '<a href="/class-materials.html"><i class="fas fa-folder-open"></i> Materials</a>'
-      + '<a href="/teacher-broadcasts.html"><i class="fas fa-bullhorn"></i> Broadcasts</a>'
       + '<a href="/discussion-forum.html"><i class="fas fa-comments"></i> Forum</a>'
       + '<a href="/teacher-profile.html"><i class="fas fa-user-cog"></i> Profile</a>';
   } else if (profile && profile.role === 'student') {
     links = '<a href="/student-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
-      + '<a href="/student-dashboard.html#results"><i class="fas fa-poll"></i> My Results</a>'
+      + '<a href="/assignments.html"><i class="fas fa-tasks"></i> Assignments</a>'
+      + '<a href="/term-report.html"><i class="fas fa-file-alt"></i> Report Card</a>'
+      + '<a href="/analytics.html"><i class="fas fa-chart-line"></i> My Stats</a>'
+      + '<a href="/leaderboard.html"><i class="fas fa-trophy"></i> Rewards</a>'
       + '<a href="/class-materials.html"><i class="fas fa-folder-open"></i> Materials</a>'
       + '<a href="/discussion-forum.html"><i class="fas fa-comments"></i> Forum</a>';
   } else if (profile && profile.role === 'parent') {
     links = '<a href="/parent-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
-      + '<a href="/parent-dashboard.html#results"><i class="fas fa-poll"></i> Results</a>'
+      + '<a href="/term-report.html"><i class="fas fa-file-alt"></i> Report Card</a>'
+      + '<a href="/analytics.html"><i class="fas fa-chart-line"></i> Analytics</a>'
+      + '<a href="/messages.html"><i class="fas fa-envelope"></i> Messages</a>'
       + '<a href="/class-materials.html"><i class="fas fa-folder-open"></i> Materials</a>'
       + '<a href="/discussion-forum.html"><i class="fas fa-comments"></i> Forum</a>';
   }
@@ -157,6 +168,13 @@ function renderNav(profile) {
 }
 
 /* ---------- Misc helpers ---------- */
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function() {});
+  });
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return '-';

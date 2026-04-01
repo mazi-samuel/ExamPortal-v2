@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        .att-grid { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .att-grid th, .att-grid td { border: 1px solid #e0e0e0; padding: 8px; text-align: center; }
+        .att-grid th { background: #667eea; color: #fff; position: sticky; top: 0; }
+        .att-grid .name-col { text-align: left; min-width: 160px; font-weight: 600; }
+        .att-btn { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #ddd; cursor: pointer; font-size: .8rem; font-weight: 700; transition: all .2s; }
+        .att-btn.present { background: #43b581; border-color: #43b581; color: #fff; }
+        .att-btn.absent { background: #f04747; border-color: #f04747; color: #fff; }
+        .att-btn.late { background: #faa61a; border-color: #faa61a; color: #fff; }
+        .att-btn.excused { background: #7289da; border-color: #7289da; color: #fff; }
+        .att-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .8rem; margin-bottom: 12px; }
+        .att-legend span { display: flex; align-items: center; gap: 4px; }
+        .att-legend .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+        .stat-bar { height: 8px; border-radius: 4px; background: #e0e0e0; overflow: hidden; margin-top: 4px; }
+        .stat-bar .fill { height: 100%; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading attendance...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        var profile = null;
+        var students = [];
+        var attendanceRecords = {};  // sessionId -> { studentId -> status }
+        var currentClass = '';
+        var currentDate = new Date().toISOString().split('T')[0];
+        var currentSessionId = null;
+
+        var STATUS_CYCLE = ['present', 'absent', 'late', 'excused'];
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'admin', 'school_admin']);
+            if (!profile) return;
+            renderNav(profile);
+            currentClass = profile.assigned_class || 'grade1';
+            renderPage();
+        }
+
+        async function loadStudents() {
+            var { data } = await db.from('profiles')
+                .select('id, full_name, admission_number')
+                .eq('school_id', profile.school_id)
+                .eq('role', 'student')
+                .eq('class', currentClass)
+                .order('full_name');
+            students = data || [];
+        }
+
+        function renderPage() {
+            var el = document.getElementById('mainContent');
+            var html = '';
+
+            // Header
+            html += '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-calendar-check"></i> Attendance</h1>';
+            html += '<p class="subtitle">Mark and track student attendance</p></div>';
+            html += '<div class="btn-group">';
+            html += '<button class="btn btn-primary" onclick="exportAttendance()"><i class="fas fa-download"></i> Export CSV</button>';
+            html += '</div>';
+            html += '</div>';
+
+            // Tabs
+            html += '<div class="tabs mb-3">';
+            html += '<button class="tab-btn active" onclick="showMarkTab(this)"><i class="fas fa-check-circle"></i> Mark Attendance</button>';
+            html += '<button class="tab-btn" onclick="showStatsTab(this)"><i class="fas fa-chart-bar"></i> Statistics</button>';
+            html += '</div>';
+
+            // Mark tab
+            html += '<div class="tab-content active" id="tab-mark">';
+            html += '<div class="card mb-3"><div class="d-flex flex-wrap gap-2 align-center">';
+            // Class select
+            html += '<select class="form-control" style="max-width:180px" id="classSelect" onchange="changeClass(this.value)">';
+            CLASS_OPTIONS.forEach(function(c) {
+                html += '<option value="' + c.value + '"' + (currentClass === c.value ? ' selected' : '') + '>' + c.label + '</option>';
+            });
+            html += '</select>';
+            // Date
+            html += '<input type="date" class="form-control" style="max-width:170px" id="dateInput" value="' + currentDate + '" onchange="changeDate(this.value)">';
+            // Session type
+            html += '<select class="form-control" style="max-width:140px" id="sessionType">';
+            html += '<option value="full_day">Full Day</option><option value="morning">Morning</option><option value="afternoon">Afternoon</option>';
+            html += '</select>';
+            html += '<button class="btn btn-success" onclick="startSession()"><i class="fas fa-play"></i> Start Session</button>';
+            html += '</div></div>';
+
+            // Legend
+            html += '<div class="att-legend">';
+            html += '<span><span class="dot" style="background:#43b581"></span> Present</span>';
+            html += '<span><span class="dot" style="background:#f04747"></span> Absent</span>';
+            html += '<span><span class="dot" style="background:#faa61a"></span> Late</span>';
+            html += '<span><span class="dot" style="background:#7289da"></span> Excused</span>';
+            html += '<span style="margin-left:auto;color:#888">Click circle to cycle status</span>';
+            html += '</div>';
+
+            html += '<div id="attendanceGrid"><p class="text-muted" style="text-align:center;padding:40px">Select class & date, then click "Start Session"</p></div>';
+            html += '</div>';
+
+            // Stats tab
+            html += '<div class="tab-content" id="tab-stats">';
+            html += '<div id="statsContent"><p class="text-muted" style="text-align:center;padding:40px">Select a class to view statistics</p></div>';
+            html += '</div>';
+
+            el.innerHTML = html;
+        }
+
+        function showMarkTab(btn) {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            btn.classList.add('active');
+            document.getElementById('tab-mark').classList.add('active');
+        }
+
+        function showStatsTab(btn) {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            btn.classList.add('active');
+            document.getElementById('tab-stats').classList.add('active');
+            loadStats();
+        }
+
+        function changeClass(v) { currentClass = v; }
+        function changeDate(v) { currentDate = v; }
+
+        async function startSession() {
+            await loadStudents();
+            if (students.length === 0) {
+                document.getElementById('attendanceGrid').innerHTML = '<div class="empty-state" style="padding:30px"><p>No students found in ' + getClassLabel(currentClass) + '</p></div>';
+                return;
+            }
+
+            // Create session via API
+            var sessionType = document.getElementById('sessionType').value;
+            try {
+                var session = await API.attendance.createSession({
+                    class: currentClass,
+                    session_date: currentDate,
+                    session_type: sessionType
+                });
+                currentSessionId = session.id;
+            } catch (err) {
+                // May already exist — still render grid
+                currentSessionId = null;
+            }
+
+            // Initialize all as present
+            attendanceRecords = {};
+            students.forEach(function(s) { attendanceRecords[s.id] = 'present'; });
+            renderGrid();
+        }
+
+        function renderGrid() {
+            var html = '<form onsubmit="saveAttendance(event)">';
+            html += '<table class="att-grid"><thead><tr><th>#</th><th class="name-col">Student</th><th>Status</th></tr></thead><tbody>';
+            students.forEach(function(s, i) {
+                var status = attendanceRecords[s.id] || 'present';
+                html += '<tr>';
+                html += '<td>' + (i + 1) + '</td>';
+                html += '<td class="name-col">' + escapeHtml(s.full_name) + '</td>';
+                html += '<td><button type="button" class="att-btn ' + status + '" data-student="' + s.id + '" onclick="cycleStatus(this)">' + status.charAt(0).toUpperCase() + '</button></td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '<div class="d-flex gap-2 mt-3">';
+            html += '<button type="button" class="btn btn-secondary" onclick="markAll(\'present\')">All Present</button>';
+            html += '<button type="button" class="btn btn-secondary" onclick="markAll(\'absent\')">All Absent</button>';
+            html += '<button type="submit" class="btn btn-success" style="margin-left:auto"><i class="fas fa-save"></i> Save Attendance</button>';
+            html += '</div></form>';
+            document.getElementById('attendanceGrid').innerHTML = html;
+        }
+
+        function cycleStatus(btn) {
+            var sid = btn.dataset.student;
+            var current = attendanceRecords[sid] || 'present';
+            var idx = STATUS_CYCLE.indexOf(current);
+            var next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+            attendanceRecords[sid] = next;
+            btn.className = 'att-btn ' + next;
+            btn.textContent = next.charAt(0).toUpperCase();
+        }
+
+        function markAll(status) {
+            students.forEach(function(s) { attendanceRecords[s.id] = status; });
+            renderGrid();
+        }
+
+        async function saveAttendance(e) {
+            e.preventDefault();
+            var records = Object.entries(attendanceRecords).map(function(entry) {
+                return { student_id: entry[0], status: entry[1] };
+            });
+            try {
+                if (currentSessionId) {
+                    await API.attendance.mark(currentSessionId, records);
+                }
+                showToast(records.length + ' records saved!', 'success');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function loadStats() {
+            var container = document.getElementById('statsContent');
+            container.innerHTML = '<div class="page-loader"><div class="loader"></div></div>';
+            try {
+                var stats = await API.attendance.classStats(currentClass);
+                renderStats(container, stats);
+            } catch (err) {
+                container.innerHTML = '<div class="empty-state"><p>Statistics not available: ' + escapeHtml(err.message) + '</p></div>';
+            }
+        }
+
+        function renderStats(el, stats) {
+            if (!stats || !stats.students || stats.students.length === 0) {
+                el.innerHTML = '<div class="empty-state"><i class="fas fa-chart-bar"></i><h3>No attendance data</h3><p>Mark attendance to see statistics.</p></div>';
+                return;
+            }
+            var html = '<div class="card mb-3">';
+            html += '<h3><i class="fas fa-chart-pie"></i> Class Summary — ' + getClassLabel(currentClass) + '</h3>';
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><span class="stat-number">' + (stats.overall_rate != null ? stats.overall_rate.toFixed(1) + '%' : '-') + '</span><span class="stat-label">Attendance Rate</span></div>';
+            html += '<div class="stat-card"><span class="stat-number">' + (stats.total_sessions || 0) + '</span><span class="stat-label">Sessions</span></div>';
+            html += '</div></div>';
+
+            // Per-student breakdown
+            html += '<div class="card"><h3>Student Breakdown</h3>';
+            html += '<table class="table"><thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Late</th><th>Rate</th></tr></thead><tbody>';
+            stats.students.forEach(function(s) {
+                var rate = s.total > 0 ? (s.present / s.total * 100) : 0;
+                var color = rate >= 90 ? '#43b581' : rate >= 75 ? '#faa61a' : '#f04747';
+                html += '<tr>';
+                html += '<td>' + escapeHtml(s.student_name || s.student_id) + '</td>';
+                html += '<td>' + (s.present || 0) + '</td>';
+                html += '<td>' + (s.absent || 0) + '</td>';
+                html += '<td>' + (s.late || 0) + '</td>';
+                html += '<td><div class="d-flex align-center gap-2"><span style="color:' + color + ';font-weight:700">' + rate.toFixed(0) + '%</span>';
+                html += '<div class="stat-bar" style="width:60px"><div class="fill" style="width:' + rate + '%;background:' + color + '"></div></div></div></td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            el.innerHTML = html;
+        }
+
+        async function exportAttendance() {
+            try {
+                var res = await API.attendance.exportCSV(currentClass);
+                if (!res.ok) throw new Error('Export failed');
+                var blob = await res.blob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'attendance_' + currentClass + '.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var el = document.createElement('span');
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

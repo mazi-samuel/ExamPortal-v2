@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        .analytics-card { border-radius: 12px; padding: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+        .metric-big { font-size: 2rem; font-weight: 700; color: #667eea; }
+        .metric-label { font-size: .85rem; color: #888; }
+        .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 8px; }
+        .bar { flex: 1; background: #667eea; border-radius: 4px 4px 0 0; min-width: 20px; position: relative; transition: height .3s; }
+        .bar:hover { opacity: .8; }
+        .bar-label { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: .65rem; white-space: nowrap; color: #888; }
+        .bar-val { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: .7rem; font-weight: 700; color: #333; }
+        .progress-ring { width: 80px; height: 80px; }
+        .weak-topic-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .weak-topic-item:last-child { border-bottom: none; }
+        .topic-bar { height: 8px; flex: 1; border-radius: 4px; background: #e0e0e0; overflow: hidden; }
+        .topic-bar .fill { height: 100%; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading analytics...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        var profile = null;
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'admin', 'school_admin', 'parent', 'student']);
+            if (!profile) return;
+            renderNav(profile);
+
+            if (profile.role === 'student') {
+                await renderStudentAnalytics(profile.id);
+            } else if (profile.role === 'parent') {
+                await renderParentView();
+            } else {
+                await renderTeacherAnalytics();
+            }
+        }
+
+        // ========== STUDENT VIEW ==========
+        async function renderStudentAnalytics(studentId) {
+            var el = document.getElementById('mainContent');
+            el.innerHTML = '<div class="page-loader"><div class="loader"></div><p>Analyzing performance...</p></div>';
+            try {
+                var data = await API.analytics.student(studentId);
+                renderStudentDashboard(el, data);
+            } catch (err) {
+                el.innerHTML = '<div class="empty-state"><i class="fas fa-chart-line"></i><h3>Analytics unavailable</h3><p>' + escapeHtml(err.message) + '</p></div>';
+            }
+        }
+
+        function renderStudentDashboard(el, d) {
+            var html = '<div class="mb-3"><h1><i class="fas fa-chart-line"></i> My Performance</h1>';
+            html += '<p class="subtitle">Your academic analytics overview</p></div>';
+
+            // Top metrics
+            html += '<div class="stats-grid">';
+            html += metricCard(d.exam_average != null ? d.exam_average.toFixed(1) + '%' : '-', 'Exam Average', 'fas fa-graduation-cap');
+            html += metricCard(d.attendance_rate != null ? d.attendance_rate.toFixed(0) + '%' : '-', 'Attendance', 'fas fa-calendar-check');
+            html += metricCard(d.assignments_completed || '0', 'Assignments Done', 'fas fa-tasks');
+            html += metricCard(d.total_points || '0', 'Points Earned', 'fas fa-star');
+            html += '</div>';
+
+            // Subject performance
+            if (d.subject_scores && d.subject_scores.length > 0) {
+                html += '<div class="card mt-3"><h3><i class="fas fa-book"></i> Subject Performance</h3>';
+                html += '<div class="bar-chart" style="margin-bottom:28px">';
+                var maxScore = Math.max.apply(null, d.subject_scores.map(function(s) { return s.average || 0; }));
+                d.subject_scores.forEach(function(s) {
+                    var h = maxScore > 0 ? ((s.average || 0) / maxScore * 100) : 0;
+                    var color = (s.average || 0) >= 70 ? '#43b581' : (s.average || 0) >= 50 ? '#faa61a' : '#f04747';
+                    html += '<div class="bar" style="height:' + h + '%;background:' + color + '">';
+                    html += '<span class="bar-val">' + (s.average || 0).toFixed(0) + '%</span>';
+                    html += '<span class="bar-label">' + escapeHtml((s.subject_name || '').substring(0, 8)) + '</span>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+            }
+
+            // Badges
+            if (d.badges && d.badges.length > 0) {
+                html += '<div class="card mt-3"><h3><i class="fas fa-medal"></i> Badges Earned</h3>';
+                html += '<div class="d-flex flex-wrap gap-2">';
+                d.badges.forEach(function(b) {
+                    html += '<div style="text-align:center;padding:8px 16px;background:#f8f9ff;border-radius:12px">';
+                    html += '<div style="font-size:1.5rem">' + (b.icon || '🏅') + '</div>';
+                    html += '<div style="font-size:.8rem;font-weight:700">' + escapeHtml(b.name) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div></div>';
+            }
+
+            el.innerHTML = html;
+        }
+
+        // ========== TEACHER VIEW ==========
+        async function renderTeacherAnalytics() {
+            var el = document.getElementById('mainContent');
+            var html = '<div class="d-flex justify-between align-center flex-wrap gap-2 mb-3">';
+            html += '<div><h1><i class="fas fa-chart-bar"></i> Analytics Dashboard</h1>';
+            html += '<p class="subtitle">Performance insights for your classes</p></div></div>';
+
+            // Class selector
+            html += '<div class="card mb-3"><div class="d-flex flex-wrap gap-2 align-center">';
+            html += '<select class="form-control" style="max-width:200px" id="analyticsClass" onchange="loadClassAnalytics()">';
+            CLASS_OPTIONS.forEach(function(c) {
+                html += '<option value="' + c.value + '">' + c.label + '</option>';
+            });
+            html += '</select>';
+            html += '</div></div>';
+
+            html += '<div id="analyticsContent"><p class="text-muted" style="text-align:center;padding:40px">Loading...</p></div>';
+            el.innerHTML = html;
+            loadClassAnalytics();
+        }
+
+        async function loadClassAnalytics() {
+            var cls = document.getElementById('analyticsClass').value;
+            var container = document.getElementById('analyticsContent');
+            container.innerHTML = '<div class="page-loader"><div class="loader"></div></div>';
+
+            try {
+                var data = await API.analytics.classOverview(cls);
+                renderClassDashboard(container, data, cls);
+            } catch (err) {
+                container.innerHTML = '<div class="empty-state"><p>' + escapeHtml(err.message) + '</p></div>';
+            }
+        }
+
+        function renderClassDashboard(el, d, cls) {
+            var html = '';
+
+            // Top stats
+            html += '<div class="stats-grid">';
+            html += metricCard(d.total_students || '0', 'Students', 'fas fa-users');
+            html += metricCard(d.average_score != null ? d.average_score.toFixed(1) + '%' : '-', 'Class Average', 'fas fa-chart-line');
+            html += metricCard(d.attendance_rate != null ? d.attendance_rate.toFixed(0) + '%' : '-', 'Attendance Rate', 'fas fa-calendar');
+            html += metricCard(d.pass_rate != null ? d.pass_rate.toFixed(0) + '%' : '-', 'Pass Rate', 'fas fa-check-circle');
+            html += '</div>';
+
+            // Top students
+            if (d.top_students && d.top_students.length > 0) {
+                html += '<div class="card mt-3"><h3><i class="fas fa-trophy"></i> Top Students</h3>';
+                html += '<table class="table"><thead><tr><th>#</th><th>Student</th><th>Average</th></tr></thead><tbody>';
+                d.top_students.forEach(function(s, i) {
+                    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(s.full_name || s.student_name) + '</td>';
+                    html += '<td><strong>' + (s.average || 0).toFixed(1) + '%</strong></td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            // Weak topics link
+            html += '<div class="card mt-3">';
+            html += '<h3><i class="fas fa-exclamation-triangle"></i> Weak Topics Analysis</h3>';
+            html += '<p class="text-muted">Select a subject below to identify areas needing attention.</p>';
+            html += '<div class="d-flex flex-wrap gap-2" id="weakTopicButtons"></div>';
+            html += '<div id="weakTopicsResult" class="mt-3"></div>';
+            html += '</div>';
+
+            el.innerHTML = html;
+
+            // Add subject buttons for weak topics
+            var btnContainer = document.getElementById('weakTopicButtons');
+            var { data: subs } = null; // will load async
+            loadSubjectsForWeakTopics(cls);
+        }
+
+        async function loadSubjectsForWeakTopics(cls) {
+            var { data: subs } = await db.from('subjects').select('id, name')
+                .eq('school_id', profile.school_id)
+                .eq('class', cls);
+            var container = document.getElementById('weakTopicButtons');
+            if (!container) return;
+            (subs || []).forEach(function(s) {
+                var btn = document.createElement('button');
+                btn.className = 'btn btn-sm btn-secondary';
+                btn.textContent = s.name;
+                btn.onclick = function() { loadWeakTopics(cls, s.id); };
+                container.appendChild(btn);
+            });
+        }
+
+        async function loadWeakTopics(cls, subjectId) {
+            var el = document.getElementById('weakTopicsResult');
+            el.innerHTML = '<div class="page-loader" style="padding:20px"><div class="loader"></div></div>';
+            try {
+                var topics = await API.analytics.weakTopics(cls, subjectId);
+                if (!topics || topics.length === 0) {
+                    el.innerHTML = '<p class="text-muted">No weak topic data available.</p>';
+                    return;
+                }
+                var html = '';
+                topics.forEach(function(t) {
+                    var pct = t.average_score || 0;
+                    var color = pct >= 70 ? '#43b581' : pct >= 50 ? '#faa61a' : '#f04747';
+                    html += '<div class="weak-topic-item">';
+                    html += '<span style="min-width:120px;font-weight:600">' + escapeHtml(t.topic) + '</span>';
+                    html += '<div class="topic-bar"><div class="fill" style="width:' + pct + '%;background:' + color + '"></div></div>';
+                    html += '<span style="min-width:50px;text-align:right;font-weight:700;color:' + color + '">' + pct.toFixed(0) + '%</span>';
+                    html += '</div>';
+                });
+                el.innerHTML = html;
+            } catch (err) {
+                el.innerHTML = '<p class="text-muted">' + escapeHtml(err.message) + '</p>';
+            }
+        }
+
+        // ========== PARENT VIEW ==========
+        async function renderParentView() {
+            // Find linked children
+            var { data: children } = await db.from('profiles')
+                .select('id, full_name, class')
+                .eq('parent_id', profile.id)
+                .eq('role', 'student');
+            if (!children || children.length === 0) {
+                document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-chart-line"></i><h3>No children linked</h3></div>';
+                return;
+            }
+            // Show first child's analytics
+            await renderStudentAnalytics(children[0].id);
+        }
+
+        // ========== HELPERS ==========
+        function metricCard(value, label, icon) {
+            return '<div class="stat-card"><span class="stat-number">' + value + '</span><span class="stat-label"><i class="' + icon + '"></i> ' + label + '</span></div>';
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var el = document.createElement('span');
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>

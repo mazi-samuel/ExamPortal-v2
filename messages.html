@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages - ExamPortal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/portal.css">
+    <style>
+        .msg-layout { display: grid; grid-template-columns: 300px 1fr; gap: 0; min-height: 500px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+        .conv-list { background: #f8f9ff; border-right: 1px solid #e0e0e0; overflow-y: auto; max-height: 600px; }
+        .conv-item { padding: 14px 16px; border-bottom: 1px solid #e8e8e8; cursor: pointer; transition: background .15s; }
+        .conv-item:hover { background: #eef0ff; }
+        .conv-item.active { background: #dde1ff; border-left: 3px solid #667eea; }
+        .conv-item .conv-name { font-weight: 700; font-size: .95rem; }
+        .conv-item .conv-preview { font-size: .8rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .conv-item .conv-time { font-size: .7rem; color: #aaa; float: right; }
+        .conv-item .unread-badge { background: #f04747; color: #fff; font-size: .65rem; padding: 2px 6px; border-radius: 10px; font-weight: 700; margin-left: 6px; }
+        .chat-area { display: flex; flex-direction: column; background: #fff; }
+        .chat-header { padding: 14px 20px; border-bottom: 1px solid #e0e0e0; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; max-height: 450px; }
+        .msg-bubble { max-width: 70%; padding: 10px 14px; border-radius: 14px; margin-bottom: 10px; font-size: .9rem; line-height: 1.4; position: relative; }
+        .msg-bubble.mine { background: #667eea; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
+        .msg-bubble.theirs { background: #f0f2f5; color: #333; border-bottom-left-radius: 4px; }
+        .msg-bubble .msg-sender { font-size: .7rem; font-weight: 700; margin-bottom: 2px; }
+        .msg-bubble .msg-time { font-size: .65rem; opacity: .7; text-align: right; margin-top: 4px; }
+        .chat-input { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid #e0e0e0; }
+        .chat-input input { flex: 1; }
+        .empty-chat { display: flex; align-items: center; justify-content: center; flex-direction: column; height: 100%; color: #aaa; }
+        @media (max-width: 768px) {
+            .msg-layout { grid-template-columns: 1fr; }
+            .conv-list { max-height: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="portal-nav" id="portal-nav"></nav>
+
+    <div class="page-wrap">
+        <div class="container container-lg" id="mainContent">
+            <div class="page-loader" id="loader">
+                <div class="loader"></div>
+                <p>Loading messages...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Conversation Modal -->
+    <div class="modal-overlay" id="newConvModal" style="display:none">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>New Conversation</h2>
+                <button class="modal-close" onclick="closeNewConvModal()">&times;</button>
+            </div>
+            <form onsubmit="createConversation(event)">
+                <div class="form-group">
+                    <label>Recipient</label>
+                    <select id="recipientSelect" class="form-control" required>
+                        <option value="">-- Select --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Subject</label>
+                    <input type="text" id="convSubject" class="form-control" placeholder="Conversation subject">
+                </div>
+                <div class="form-group">
+                    <label>First Message</label>
+                    <textarea id="firstMessage" class="form-control" rows="3" required placeholder="Type your message..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-success btn-block"><i class="fas fa-paper-plane"></i> Start Conversation</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        var profile = null;
+        var conversations = [];
+        var currentConvId = null;
+        var currentMessages = [];
+        var contacts = [];
+
+        async function init() {
+            profile = await requireAuth(['teacher', 'admin', 'school_admin', 'parent']);
+            if (!profile) return;
+            renderNav(profile);
+            await loadConversations();
+            await loadContacts();
+            renderPage();
+        }
+
+        async function loadConversations() {
+            try {
+                conversations = await API.messages.conversations();
+                if (!Array.isArray(conversations)) conversations = conversations.data || [];
+            } catch (e) { conversations = []; }
+        }
+
+        async function loadContacts() {
+            // Teachers can message parents & other teachers; parents can message teachers
+            var roles = profile.role === 'parent' ? ['teacher'] : ['parent', 'teacher'];
+            var { data } = await db.from('profiles')
+                .select('id, full_name, role')
+                .eq('school_id', profile.school_id)
+                .in('role', roles)
+                .neq('id', profile.id)
+                .order('full_name');
+            contacts = data || [];
+        }
+
+        function renderPage() {
+            var el = document.getElementById('mainContent');
+            var html = '';
+
+            html += '<div class="d-flex justify-between align-center mb-3">';
+            html += '<div><h1><i class="fas fa-envelope"></i> Messages</h1>';
+            html += '<p class="subtitle">Parent-teacher messaging</p></div>';
+            html += '<button class="btn btn-success" onclick="openNewConvModal()"><i class="fas fa-plus"></i> New Message</button>';
+            html += '</div>';
+
+            html += '<div class="msg-layout">';
+
+            // Conversation list
+            html += '<div class="conv-list">';
+            if (conversations.length === 0) {
+                html += '<div style="padding:40px 20px;text-align:center;color:#aaa"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:8px;display:block"></i>No conversations</div>';
+            } else {
+                conversations.forEach(function(c) {
+                    var active = c.id === currentConvId ? ' active' : '';
+                    var name = c.subject || c.participant_names || 'Conversation';
+                    var preview = c.last_message || '';
+                    html += '<div class="conv-item' + active + '" onclick="openConversation(\'' + c.id + '\')">';
+                    html += '<div class="conv-name">' + escapeHtml(name);
+                    if (c.unread_count && c.unread_count > 0) html += '<span class="unread-badge">' + c.unread_count + '</span>';
+                    html += '</div>';
+                    html += '<div class="conv-preview">' + escapeHtml(preview) + '</div>';
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+
+            // Chat area
+            html += '<div class="chat-area">';
+            if (!currentConvId) {
+                html += '<div class="empty-chat"><i class="fas fa-comments" style="font-size:3rem;margin-bottom:12px"></i><p>Select a conversation</p></div>';
+            } else {
+                var conv = conversations.find(function(c) { return c.id === currentConvId; });
+                html += '<div class="chat-header"><i class="fas fa-comment-dots"></i> ' + escapeHtml(conv ? (conv.subject || 'Conversation') : 'Chat') + '</div>';
+                html += '<div class="chat-messages" id="chatMessages">';
+                currentMessages.forEach(function(m) {
+                    var isMine = m.sender_id === profile.id;
+                    html += '<div class="msg-bubble ' + (isMine ? 'mine' : 'theirs') + '">';
+                    if (!isMine) html += '<div class="msg-sender">' + escapeHtml(m.sender_name || 'Unknown') + '</div>';
+                    html += escapeHtml(m.body);
+                    html += '<div class="msg-time">' + formatTime(m.created_at) + '</div>';
+                    html += '</div>';
+                });
+                if (currentMessages.length === 0) {
+                    html += '<div style="text-align:center;color:#aaa;padding:40px">No messages yet. Start the conversation!</div>';
+                }
+                html += '</div>';
+                html += '<div class="chat-input">';
+                html += '<input type="text" class="form-control" id="msgInput" placeholder="Type a message..." onkeydown="if(event.key===\'Enter\')sendMessage()">';
+                html += '<button class="btn btn-primary" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>'; // msg-layout
+            el.innerHTML = html;
+
+            // Scroll to bottom
+            var chatDiv = document.getElementById('chatMessages');
+            if (chatDiv) chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
+
+        async function openConversation(convId) {
+            currentConvId = convId;
+            try {
+                var result = await API.messages.getMessages(convId);
+                currentMessages = Array.isArray(result) ? result : (result.data || []);
+                currentMessages.reverse(); // oldest first
+            } catch (e) { currentMessages = []; }
+            renderPage();
+        }
+
+        async function sendMessage() {
+            var input = document.getElementById('msgInput');
+            var body = input.value.trim();
+            if (!body || !currentConvId) return;
+            input.value = '';
+            try {
+                await API.messages.send(currentConvId, body);
+                await openConversation(currentConvId);
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        // --- New conversation ---
+        function openNewConvModal() {
+            var sel = document.getElementById('recipientSelect');
+            sel.innerHTML = '<option value="">-- Select --</option>';
+            contacts.forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c.id;
+                o.textContent = c.full_name + ' (' + c.role + ')';
+                sel.appendChild(o);
+            });
+            document.getElementById('convSubject').value = '';
+            document.getElementById('firstMessage').value = '';
+            document.getElementById('newConvModal').style.display = 'flex';
+        }
+        function closeNewConvModal() { document.getElementById('newConvModal').style.display = 'none'; }
+
+        async function createConversation(e) {
+            e.preventDefault();
+            var recipientId = document.getElementById('recipientSelect').value;
+            var subject = document.getElementById('convSubject').value.trim();
+            var firstMsg = document.getElementById('firstMessage').value.trim();
+            if (!recipientId || !firstMsg) return;
+            try {
+                var conv = await API.messages.createConversation([recipientId], subject);
+                await API.messages.send(conv.id, firstMsg);
+                closeNewConvModal();
+                await loadConversations();
+                currentConvId = conv.id;
+                await openConversation(conv.id);
+            } catch (err) { showToast(err.message, 'error'); }
+        }
+
+        function formatTime(ts) {
+            if (!ts) return '';
+            var d = new Date(ts);
+            var now = new Date();
+            if (d.toDateString() === now.toDateString()) {
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            return d.toLocaleDateString();
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            var el = document.createElement('span');
+            el.textContent = str;
+            return el.innerHTML;
+        }
+
+        init();
+    </script>
+</body>
+</html>
