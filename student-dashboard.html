@@ -22,6 +22,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase-config.js"></script>
+    <script src="exam-data-final-term.js"></script>
     <script>
         let profile = null;
 
@@ -36,17 +37,40 @@
             var schoolName = profile.schools ? profile.schools.name : 'Your School';
             var classLabel = getClassWithSection(profile.class, profile.class_section);
 
-            // Fetch available exams for this student's school + class (base grade)
-            // e.g. a Grade 1A student sees all Grade 1 exams
-            var baseGrade = getBaseGrade(profile.class);
-            var { data: exams } = await db
+            // Fetch published exams for this school, then normalize class values client-side.
+            // This prevents mismatches like "Grade 1", "grade1A", or "Basic 1" hiding exams.
+            var studentClass = normalizeClassKey(profile.class) || getBaseGrade(profile.class);
+            var { data: examsRaw } = await db
                 .from('exams')
                 .select('*, subjects(name, icon)')
                 .eq('school_id', profile.school_id)
-                .eq('class', baseGrade)
                 .eq('is_published', true)
                 .order('exam_date', { ascending: false });
-            exams = exams || [];
+
+            var globalExamClasses = ['all', 'allclass', 'allclasses', 'all_class', 'all_classes', 'all class', 'all classes', 'general'];
+            var examsFromDb = (examsRaw || []).filter(function(e) {
+                var normalizedExamClass = normalizeClassKey(e.class);
+                if (normalizedExamClass && studentClass) return normalizedExamClass === studentClass;
+
+                var rawExamClass = String(e.class || '').trim().toLowerCase();
+                if (globalExamClasses.indexOf(rawExamClass) !== -1) return true;
+
+                // If class is missing/legacy and can't be normalized, keep exam visible.
+                if (!normalizedExamClass) return true;
+
+                return false;
+            });
+
+            // Always include bundled final-term exam for the student's class.
+            var localFinalExam = buildLocalFinalTermExamForClass(studentClass) || buildLocalFinalTermExamForClass(classLabel);
+            var exams = (examsFromDb || []).slice();
+            if (localFinalExam) {
+                var existsSameTitle = exams.some(function(e) {
+                    return normalizeClassKey(e.class) === normalizeClassKey(localFinalExam.class)
+                        && String(e.title || '').trim().toLowerCase() === String(localFinalExam.title || '').trim().toLowerCase();
+                });
+                if (!existsSameTitle) exams.push(localFinalExam);
+            }
 
             // Fetch this student's submissions
             var { data: submissions } = await db
@@ -57,7 +81,10 @@
             submissions = submissions || [];
 
             var submittedExamIds = submissions.filter(function(s){ return s.submitted_at; }).map(function(s){ return s.exam_id; });
-            var availableExams = exams.filter(function(e){ return submittedExamIds.indexOf(e.id) === -1; });
+            var availableExams = exams.filter(function(e) {
+                if (e.isLocalFinalTerm) return true;
+                return submittedExamIds.indexOf(e.id) === -1;
+            });
             var completedCount = submissions.filter(function(s){ return s.submitted_at; }).length;
             var avgPct = 0;
             if (completedCount > 0) {
@@ -98,6 +125,8 @@
                     var subjectIcon = (exam.subjects && exam.subjects.icon) ? exam.subjects.icon : 'fas fa-book';
                     var dateStr = exam.exam_date ? formatDate(exam.exam_date) : 'Anytime';
                     var timeStr = exam.exam_time ? formatTime(exam.exam_time) : '';
+                    var startUrl = exam.isLocalFinalTerm ? '/take-exam.html?localFinalTerm=' + exam.class : '/take-exam.html?id=' + exam.id;
+                    var startLabel = 'Start Exam';
 
                     html += '<div class="exam-card">';
                     html += '<div class="exam-card-header">';
@@ -105,6 +134,9 @@
                     html += '<div><h3 style="color:#4a47a3;margin:0">' + exam.title + '</h3>';
                     html += '<span style="color:#999;font-size:.88rem">' + subjectName + '</span></div>';
                     html += '</div>';
+                    if (exam.isLocalFinalTerm) {
+                        html += '<div class="mb-1"><span class="badge badge-success"><i class="fas fa-star"></i> Current Final-Term Exam</span></div>';
+                    }
                     if (exam.description) html += '<p style="color:#666;font-size:.92rem;margin-bottom:8px">' + exam.description + '</p>';
                     html += '<div class="exam-card-meta">';
                     html += '<span><i class="fas fa-calendar"></i> ' + dateStr + '</span>';
@@ -113,7 +145,7 @@
                     html += '<span><i class="fas fa-star"></i> ' + exam.total_marks + ' marks</span>';
                     html += '</div>';
                     html += '<div class="exam-card-footer">';
-                    html += '<a href="/take-exam.html?id=' + exam.id + '" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start Exam</a>';
+                    html += '<a href="' + startUrl + '" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> ' + startLabel + '</a>';
                     html += '</div>';
                     html += '</div>';
                 });
@@ -182,6 +214,37 @@
             });
             var el = document.getElementById('tab-' + tab);
             if (el) el.classList.add('active');
+        }
+
+        function buildLocalFinalTermExamForClass(studentClass) {
+            var allLocalExams = window.examDataFinalTerm || null;
+            if (!allLocalExams) return null;
+
+            var classKey = normalizeClassKey(studentClass) || String(studentClass || '').trim().toLowerCase();
+            var data = allLocalExams[classKey];
+            if (!data) {
+                var keys = Object.keys(allLocalExams);
+                var directMatch = keys.find(function(k) { return normalizeClassKey(k) === normalizeClassKey(classKey); });
+                if (directMatch) {
+                    classKey = directMatch;
+                    data = allLocalExams[directMatch];
+                }
+            }
+            if (!data) return null;
+
+            return {
+                id: 'local-final-term-' + classKey,
+                title: data.name || ('ICT Final Term - ' + getClassLabel(classKey)),
+                description: 'Current final-term exam loaded from local exam data.',
+                class: classKey,
+                duration_minutes: 60,
+                total_marks: data.totalMarks || 60,
+                exam_date: null,
+                exam_time: null,
+                subjects: { name: 'ICT', icon: 'fas fa-laptop-code' },
+                isLocalFinalTerm: true,
+                is_published: true
+            };
         }
 
         init();

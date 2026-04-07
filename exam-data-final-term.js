@@ -287,6 +287,11 @@ const examDataFinalTerm = {
     }
 };
 
+// Expose for browser pages that load this file via <script>.
+if (typeof window !== 'undefined') {
+    window.examDataFinalTerm = examDataFinalTerm;
+}
+
 // Export for use in other files
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = examDataFinalTerm;

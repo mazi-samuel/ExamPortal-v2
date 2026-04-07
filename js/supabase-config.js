@@ -70,9 +70,44 @@ function getClassWithSection(cls, section) {
   return label;
 }
 
-// Helper: extract base grade from a class value (e.g. 'grade1' → 'grade1')
+// Normalize class values like "grade1A", "Grade 1", "Basic 1", "year 1" -> "grade1"
+function normalizeClassKey(cls) {
+  if (!cls) return '';
+  var raw = String(cls).trim().toLowerCase();
+  if (!raw) return '';
+
+  var compact = raw.replace(/[^a-z0-9]/g, '');
+
+  // Common direct forms
+  var direct = compact.match(/^grade([1-6])[a-z]?$/);
+  if (direct) return 'grade' + direct[1];
+
+  // Basic / Year forms
+  var basic = compact.match(/^basic([1-6])[a-z]?$/);
+  if (basic) return 'grade' + basic[1];
+
+  var year = compact.match(/^year([1-6])[a-z]?$/);
+  if (year) return 'grade' + year[1];
+
+  // Single-digit shorthand like "g1"
+  var short = compact.match(/^g([1-6])[a-z]?$/);
+  if (short) return 'grade' + short[1];
+
+  // Embedded forms like "Grade 5 (Basic 5)", "Class Grade5A", "Primary Year 4"
+  var embedded = compact.match(/(?:grade|basic|year|class|g)([1-6])/);
+  if (embedded) return 'grade' + embedded[1];
+
+  // Last fallback: any standalone digit 1-6 in the raw class label
+  var anyDigit = raw.match(/\b([1-6])\b/);
+  if (anyDigit) return 'grade' + anyDigit[1];
+
+  return '';
+}
+
+// Helper: extract base grade from a class value
 function getBaseGrade(cls) {
-  return cls ? cls.replace(/[A-Za-z]$/, '') : cls;
+  var normalized = normalizeClassKey(cls);
+  return normalized || cls;
 }
 
 // Redirect if not authenticated (or wrong role)
@@ -126,6 +161,7 @@ function renderNav(profile) {
 
   if (profile && profile.role === 'teacher') {
     links = '<a href="/teacher-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
+      + '<a href="/teacher-dashboard.html#exams"><i class="fas fa-file-alt"></i> Exams</a>'
       + '<a href="/exam-builder.html"><i class="fas fa-plus-circle"></i> Create Exam</a>'
       + '<a href="/ca-entry.html"><i class="fas fa-clipboard-check"></i> CA Scores</a>'
       + '<a href="/assignments.html"><i class="fas fa-tasks"></i> Assignments</a>'
@@ -139,6 +175,7 @@ function renderNav(profile) {
       + '<a href="/teacher-profile.html"><i class="fas fa-user-cog"></i> Profile</a>';
   } else if (profile && profile.role === 'student') {
     links = '<a href="/student-dashboard.html"><i class="fas fa-th-large"></i> Dashboard</a>'
+      + '<a href="/student-dashboard.html#exams"><i class="fas fa-file-alt"></i> Exams</a>'
       + '<a href="/assignments.html"><i class="fas fa-tasks"></i> Assignments</a>'
       + '<a href="/term-report.html"><i class="fas fa-file-alt"></i> Report Card</a>'
       + '<a href="/analytics.html"><i class="fas fa-chart-line"></i> My Stats</a>'

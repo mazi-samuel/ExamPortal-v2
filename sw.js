@@ -1,7 +1,7 @@
 // =============================================
 // Service Worker — Offline-first caching
 // =============================================
-const CACHE_NAME = 'examportal-v2';
+const CACHE_NAME = 'examportal-v3';
 const STATIC_ASSETS = [
   '/login.html',
   '/css/portal.css',

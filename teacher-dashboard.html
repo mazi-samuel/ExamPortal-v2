@@ -57,6 +57,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase-config.js"></script>
+    <script src="exam-data-final-term.js"></script>
     <script>
         var profile = null;
         var subjects = [];
@@ -78,6 +79,9 @@
 
             await loadData();
             renderDashboard();
+
+            // Allow direct links like /teacher-dashboard.html#exams
+            applyTabFromHash();
         }
 
         async function loadData() {
@@ -105,6 +109,15 @@
             }
             var { data: exs } = await examQuery.order('created_at', { ascending: false });
             exams = exs || [];
+
+            var localExams = buildLocalFinalTermExamsForTeacher(profile);
+            localExams.forEach(function(localExam) {
+                var existsSameTitle = exams.some(function(e) {
+                    return normalizeClassKey(e.class) === normalizeClassKey(localExam.class)
+                        && String(e.title || '').trim().toLowerCase() === String(localExam.title || '').trim().toLowerCase();
+                });
+                if (!existsSameTitle) exams.push(localExam);
+            });
         }
 
         function renderDashboard() {
@@ -181,9 +194,11 @@
                 html += '<th>S/N</th><th>Title</th><th>Subject</th><th>Class</th><th>Date</th><th>Duration</th><th>Status</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 exams.forEach(function(e, i) {
-                    var status = e.is_published
-                        ? '<span class="badge badge-success">Published</span>'
-                        : '<span class="badge badge-warning">Draft</span>';
+                    var status = e.isLocalFinalTerm
+                        ? '<span class="badge badge-info">Final Term (Local)</span>'
+                        : (e.is_published
+                            ? '<span class="badge badge-success">Published</span>'
+                            : '<span class="badge badge-warning">Draft</span>');
                     html += '<tr>';
                     html += '<td>' + (i + 1) + '</td>';
                     html += '<td>' + e.title + '</td>';
@@ -194,13 +209,17 @@
                     html += '<td>' + status + '</td>';
                     html += '<td>';
                     html += '<div class="d-flex gap-1 justify-center">';
-                    html += '<a href="/exam-builder.html?edit=' + e.id + '" class="btn btn-sm btn-info" title="Edit"><i class="fas fa-edit"></i></a>';
-                    if (!e.is_published) {
-                        html += '<button class="btn btn-sm btn-success" onclick="togglePublish(\'' + e.id + '\', true)" title="Publish"><i class="fas fa-globe"></i></button>';
+                    if (e.isLocalFinalTerm) {
+                        html += '<span class="badge badge-info" title="Visible to students from their Exams menu">Student Exams Menu</span>';
                     } else {
-                        html += '<button class="btn btn-sm btn-warning" onclick="togglePublish(\'' + e.id + '\', false)" title="Unpublish"><i class="fas fa-eye-slash"></i></button>';
+                        html += '<a href="/exam-builder.html?edit=' + e.id + '" class="btn btn-sm btn-info" title="Edit"><i class="fas fa-edit"></i></a>';
+                        if (!e.is_published) {
+                            html += '<button class="btn btn-sm btn-success" onclick="togglePublish(\'' + e.id + '\', true)" title="Publish"><i class="fas fa-globe"></i></button>';
+                        } else {
+                            html += '<button class="btn btn-sm btn-warning" onclick="togglePublish(\'' + e.id + '\', false)" title="Unpublish"><i class="fas fa-eye-slash"></i></button>';
+                        }
+                        html += '<button class="btn btn-sm btn-danger" onclick="deleteExam(\'' + e.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
                     }
-                    html += '<button class="btn btn-sm btn-danger" onclick="deleteExam(\'' + e.id + '\')" title="Delete"><i class="fas fa-trash"></i></button>';
                     html += '</div>';
                     html += '</td>';
                     html += '</tr>';
@@ -232,6 +251,41 @@
             tabs.forEach(function(t) {
                 var el = document.getElementById('tab-' + t);
                 if (el) el.classList.toggle('active', t === tab);
+            });
+        }
+
+        function applyTabFromHash() {
+            var allowedTabs = ['subjects', 'exams', 'recent'];
+            var tab = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+            if (allowedTabs.indexOf(tab) !== -1) {
+                switchTab(tab);
+            }
+        }
+
+        function buildLocalFinalTermExamsForTeacher(userProfile) {
+            var allLocalExams = window.examDataFinalTerm || null;
+            if (!allLocalExams) return [];
+
+            var classKeys = Object.keys(allLocalExams);
+
+            if (userProfile && userProfile.teacher_status === 'class_teacher' && userProfile.assigned_class) {
+                var assigned = normalizeClassKey(userProfile.assigned_class) || userProfile.assigned_class;
+                classKeys = classKeys.filter(function(k) { return k === assigned; });
+            }
+
+            return classKeys.map(function(classKey) {
+                var data = allLocalExams[classKey] || {};
+                return {
+                    id: 'local-final-term-' + classKey,
+                    title: data.name || ('ICT Final Term - ' + getClassLabel(classKey)),
+                    class: classKey,
+                    exam_date: null,
+                    duration_minutes: 60,
+                    total_marks: data.totalMarks || 60,
+                    is_published: true,
+                    isLocalFinalTerm: true,
+                    subjects: { name: 'ICT' }
+                };
             });
         }
 
